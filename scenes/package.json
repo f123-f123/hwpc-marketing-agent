@@ -1,0 +1,14 @@
+{
+  "name": "@hwpc/scenes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "预先制作、独立维护的场景清单、版本与声明性定义（已加入根 workspaces）",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": { "@hwpc/contracts": "*" }
+}

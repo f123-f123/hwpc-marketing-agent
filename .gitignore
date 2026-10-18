@@ -1,0 +1,36 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+
+# 凭证与环境变量（只提交 .env.example）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 本地私有资料：知识库解压目录、缓存、导出物
+local-data/
+.cache/
+.runtime/
+.local-sessions/
+exports/
+*.zip
+*.7z
+*.tmp
+
+# ima 客户端及安装包
+ima.copilot/
+ima-skill/
+*.exe
+
+# 日志与系统文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

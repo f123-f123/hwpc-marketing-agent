@@ -1,0 +1,23 @@
+{
+  "name": "@hwpc/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "1.19.17",
+    "@hwpc/agent": "*",
+    "@hwpc/contracts": "*",
+    "@hwpc/data": "*",
+    "@hwpc/fixtures": "*",
+    "@hwpc/scenes": "*",
+    "dotenv": "17.4.2",
+    "zod": "4.6.7",
+    "hono": "4.13.13",
+    "tsx": "4.23.15"
+  }
+}

@@ -1,0 +1,71 @@
+/**
+ * 设计 token：全站唯一来源。
+ * 组件样式里不要出现本文件之外的色值、字号、间距、圆角；新增视觉值先加到这里。
+ * 当前产品只有浅色主题，因此不提供 .dark 变量；若将来支持深色模式，在此补一套并保持同样的 token 名。
+ */
+:root {
+  /* 颜色：1 个主色 + 中性灰阶 + 语义色 */
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f8;
+  --color-fg: #1c2333;
+  --color-muted-fg: #5b6579;
+  --color-border: #dde2ee;
+  --color-primary: #1f4fd8;
+  --color-primary-hover: #173fb0;
+  --color-primary-fg: #ffffff;
+  --color-primary-weak: #eaf0ff;
+  --color-success: #12703a;
+  --color-warning: #8a4b00;
+  --color-warning-weak: #fff6e0;
+  --color-danger: #a3202b;
+  --color-danger-weak: #fdecee;
+
+  /* 字号阶梯：12 / 14 / 16 / 20 / 24 / 32 */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+
+  /* 间距：4px 基准 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* 圆角：3 档，全站不混用 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 阴影：1 档；层级优先用 1px 边框 */
+  --shadow-1: 0 1px 2px rgba(28, 35, 51, 0.06);
+
+  /* 布局宽度 */
+  --content-max: 1120px;
+  --reading-max: 760px;
+  --topbar-h: 48px;
+
+  /* 暗色叙事区（页面 hero）专用；正文区域仍使用浅色 token */
+  --color-hero-bg: #0b0d12;
+  --color-hero-fg: #f7f8fb;
+  --color-hero-muted: #a6adbd;
+  --color-hero-line: #23262f;
+}
+
+/* 动效只用于状态反馈；尊重系统的减少动态偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
