@@ -4,6 +4,7 @@ import { showroomSpace } from "@hwpc/scenes";
 import { Panorama, type View } from "../scenes/Panorama";
 import { SessionHttpError, sessionClient } from "./client";
 import "../scenes/scene.css";
+import "../styles/showroom.css";
 
 const SESSION_KEY = "hwpc.active-session-id";
 const VIEW_KEY = "hwpc.showroom-view";
@@ -12,7 +13,8 @@ const outcomeLabel = { fits: "满足", fits_with_compromise: "有取舍", not_fi
 const statusLabel = { known: "用户明说", inferred: "系统推断", default: "系统默认", pending: "待确认" };
 const applicabilityLabel = { applicable: "有证据支持适用", conditional: "尚有条件待确认", not_applicable: "不适用", unknown: "支持性未知", illustrative: "仅说明性体验" };
 const ORIGIN_LABEL: Record<string, string> = { local: "本地知识库", ima: "ima 知识库", mock: "模拟数据（MOCK）" };
-const MEDIA_CREDIT = "素材：华为商城电脑专区（2026-10-17 快照）· 场景示意，不证明具体型号能力与参数";
+const MEDIA_CREDIT = "华为商城电脑专区素材 · 仅作场景展示，具体功能以型号资料为准";
+const CAPABILITY_LABEL: Record<string, string> = { offline_experience: "离线体验", local_recovery: "进度保存", online_ai: "在线顾问", live_updates: "资料更新", cross_device_continuation: "跨设备使用", sharing: "方案分享" };
 const NEEDS_STATUS_LABEL: Record<string, string> = {
   collecting: "仍在沟通",
   awaiting_confirmation: "等待确认",
@@ -27,11 +29,10 @@ const SECTIONS = [
   { id: "plan", label: "方案" },
 ] as const;
 
-function SectionHead({ no, title, aside }: { no: string; title: string; aside?: string }) {
+function SectionHead({ id, title, aside, description }: { id: string; title: string; aside?: string; description?: string }) {
   return (
     <header className="section-head">
-      <span className="section-no" aria-hidden="true">{no}</span>
-      <h2 className="section-title">{title}</h2>
+      <div><h2 id={id} className="section-title">{title}</h2>{description && <p className="section-description">{description}</p>}</div>
       {aside && <span className="section-aside">{aside}</span>}
     </header>
   );
@@ -272,8 +273,8 @@ export function SessionApp() {
     try { update(await call()); } catch (e) { if (e instanceof SessionHttpError && e.snapshot) update(e.snapshot); setError(e instanceof Error ? e.message : "请求失败"); }
     finally { setBusy(false); }
   };
-  const startNew = () => { setSnap(null); setError(""); setActiveId(null); localStorage.removeItem(SESSION_KEY); localStorage.removeItem(POSITION_KEY); };
-  const create = (value: string) => { const t = value.trim(); if (!t) return; setActiveId(null); void run(() => sessionClient.create(t)); };
+  const startNew = () => { setSnap(null); setError(""); setActiveId(null); localStorage.removeItem(SESSION_KEY); localStorage.removeItem(POSITION_KEY); window.scrollTo({ top: 0, behavior: "instant" }); };
+  const create = (value: string) => { const t = value.trim(); if (!t) return; setActiveId(null); void run(async () => { const next = await sessionClient.create(t); window.scrollTo({ top: 0, behavior: "instant" }); return next; }); };
   const send = () => { if (!snap || !text.trim()) return; void run(() => sessionClient.message(snap, text.trim())); setText(""); };
   const submitAnswers = () => {
     if (!snap) return;
@@ -317,11 +318,11 @@ export function SessionApp() {
   const currentPlan = snap?.plan.current;
   const candidates = currentPlan?.candidates ?? snap?.candidates.assessments ?? [];
   const headline = currentPlan
-    ? taskValue ? `${taskValue} · 选购方案` : "你的选购方案"
-    : taskValue ? `${taskValue}，怎么选` : "先说清楚，再谈推荐";
+    ? "属于你的选择，\n也适合你的生活。"
+    : taskValue ? `${taskValue}，\n从适合你开始。` : "一台电脑，\n你的万种可能。";
   const lede = currentPlan
-    ? `方案 v${currentPlan.version} 基于需求 v${currentPlan.needVersion} 的确认；下面依次是需求、取舍、体验与限制。`
-    : "按需求确认、候选与取舍、场景体验、个人方案展开；确认需求后才会生成方案。";
+    ? "把你的需求、候选与场景体验放在一起。慢慢比较，找到更适合自己的使用方式。"
+    : "从日常工作，到设备之间的默契配合。先聊聊你的使用方式，再一起找到合适的电脑。";
   const needChips = [entryValue("task"), entryValue("budget"), entryValue("existingDevices"), entryValue("hardConstraints")]
     .filter((v): v is string => Boolean(v))
     .slice(0, 4)
@@ -338,19 +339,20 @@ export function SessionApp() {
   })();
 
   return (
-    <div className="app" id="top">
+    <div className="app showroom-app" id="top">
       <header className="topbar">
-        <strong className="brand">门店选购顾问</strong>
+        <a className="brand" href="#top"><span className="brand-mark" aria-hidden="true" />华为 PC <span className="brand-subtitle">体验顾问</span></a>
         <span className="spacer" />
-        {snap && <><span className="tag">会话 {snap.sessionId.slice(0, 8)}</span><button type="button" className="btn" onClick={startNew}>新顾客</button></>}
+        <span className="header-note">让选择，更贴近你的生活</span>
+        {snap && <button type="button" className="btn" onClick={startNew}>开始新咨询</button>}
       </header>
 
       <div className={`statusbar ${snap?.isMock ? "is-mock" : ""}`} role="status">
         {snap ? (
           <>
-            <strong>{snap.isMock ? "含模拟组件/场景" : "服务端会话"}</strong>
-            <span>资料：{ORIGIN_LABEL[snap.components.dataOrigin] ?? snap.components.dataOrigin}；顾问：{snap.components.engine.isMock ? "模拟" : "真实模型"}</span>
-            <span>版本：需求 v{snap.needs.version}{snap.plan.current ? `；方案 v${snap.plan.current.version}` : ""}</span>
+            <strong>{snap.isMock ? "模拟体验" : "服务已连接"}</strong>
+            <span>{ORIGIN_LABEL[snap.components.dataOrigin] ?? snap.components.dataOrigin} / {snap.components.engine.isMock ? "规则模拟顾问" : "在线顾问"}</span>
+            <span className="status-version">需求 v{snap.needs.version}{snap.plan.current ? ` / 方案 v${snap.plan.current.version}` : ""}</span>
           </>
         ) : backend ? (
           <>
@@ -382,7 +384,7 @@ export function SessionApp() {
           <section className="report-hero" aria-labelledby="report-headline">
             <div className="report-hero-inner">
               <div className="report-hero-copy">
-                <p className="report-kicker">华为 PC · 个人选购方案</p>
+                <p className="report-kicker">为你的使用方式而选</p>
                 <h1 className="report-headline" id="report-headline">{headline}</h1>
                 <p className="report-lede">{lede}</p>
                 {needChips.length > 0 && <ul className="report-chips">{needChips.map((chip) => <li key={chip}>{chip}</li>)}</ul>}
@@ -390,16 +392,10 @@ export function SessionApp() {
                   {primaryAction}
                   <a className="report-textlink" href="#talk">继续和顾问沟通</a>
                 </div>
-                <ul className="report-meta">
-                  <li><span>需求</span><strong>v{snap.needs.version}</strong></li>
-                  <li><span>候选</span><strong>{candidates.length}</strong></li>
-                  <li><span>场景</span><strong>{instances.length}</strong></li>
-                  <li><span>方案</span><strong>{currentPlan ? `v${currentPlan.version}` : "—"}</strong></li>
-                </ul>
-                <p className="report-fineprint">{snap.isMock ? "本页含模拟内容，已逐处标注，不作为真机测试结论。" : "资料来自本地知识库，非实时更新。"} · 需求状态：{NEEDS_STATUS_LABEL[snap.needs.status] ?? snap.needs.status}</p>
+                <p className="report-fineprint">{NEEDS_STATUS_LABEL[snap.needs.status] ?? snap.needs.status} · 随时补充，逐步找到答案</p>
               </div>
               <figure className="report-hero-visual">
-                <img src="/media/hero-device.png" alt="笔记本电脑外观示意" width={393} height={288} />
+                <img src="/media/home-collab.jpg" alt="明亮空间中使用华为电脑协作的场景，仅作氛围展示" width={984} height={588} fetchPriority="high" />
                 <figcaption>{MEDIA_CREDIT}</figcaption>
               </figure>
             </div>
@@ -407,18 +403,18 @@ export function SessionApp() {
 
           <nav className="report-nav" aria-label="本页导航">
             <div className="report-nav-inner">
-              {SECTIONS.map((s, i) => (
+              {SECTIONS.map((s) => (
                 <a key={s.id} href={`#${s.id}`} className={`report-nav-link${activeSection === s.id ? " on" : ""}`} aria-current={activeSection === s.id ? "true" : undefined}>
-                  <span className="report-nav-no" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>{s.label}
+                  {s.label}
                 </a>
               ))}
             </div>
           </nav>
 
           <section id="needs" className="report-section" aria-labelledby="needs-title">
-            <SectionHead no="01" title="需求摘要" aside={`v${snap.needs.version} · ${NEEDS_STATUS_LABEL[snap.needs.status] ?? snap.needs.status}`} />
+            <SectionHead id="needs-title" title="先认识你的日常。" description="把重要的事情记下来，让每一个推荐都有出发点。" aside={`需求 v${snap.needs.version}`} />
             <div className="need-cards">
-              {snap.needs.summary.groups.map((g) => (
+              {snap.needs.summary.groups.filter((g) => g.entries.length > 0).map((g) => (
                 <article className="need-card" key={g.key}>
                   <h3>{NEED_KEY_LABEL[g.key]}</h3>
                   {g.entries.length > 0 ? (
@@ -437,6 +433,7 @@ export function SessionApp() {
                 </article>
               ))}
             </div>
+            {snap.needs.summary.groups.some((g) => g.entries.length === 0) && <p className="needs-pending">还可以聊聊：{snap.needs.summary.groups.filter((g) => g.entries.length === 0).map((g) => NEED_KEY_LABEL[g.key]).join("、")}。不用一次说完。</p>}
             {snap.needs.summary.assumptions.length > 0 && <p className="report-note">待你核对：{snap.needs.summary.assumptions.map((a) => a.text).join("；")}</p>}
             {snap.needs.summary.blockers.length > 0 && <p className="alert alert-warn">暂不能确认：{snap.needs.summary.blockers.join("；")}</p>}
             {snap.needs.invalidatedConfirmations.length > 0 && <p className="report-note">之前有 {snap.needs.invalidatedConfirmations.length} 次确认因需求变化失效，需要重新确认。</p>}
@@ -455,7 +452,7 @@ export function SessionApp() {
           </section>
 
           <section id="talk" className="report-section" aria-labelledby="talk-title">
-            <SectionHead no="02" title="和顾问沟通" aside={`${snap.conversation.messages.length} 条消息`} />
+            <SectionHead id="talk-title" title="好的选择，从聊一聊开始。" description="不用熟悉参数，说说你想完成什么就好。" />
             <div className="talk-grid">
               <div className="chat report-chat">
                 <ul className="messages">
@@ -497,7 +494,8 @@ export function SessionApp() {
                 {snap.run.state === "failed" && <button type="button" className="btn" disabled={busy} onClick={resumeTask}>恢复中断任务</button>}
               </div>
               <aside className="report-aside">
-                <h3>可以说得更具体</h3>
+                <figure className="conversation-visual"><img src="/media/huawei-collaboration.png" alt="华为电脑在日常协作中的场景示意" width={393} height={449} loading="lazy" /></figure>
+                <h3>从一个具体的场景说起</h3>
                 <ul className="tip-list">
                   <li>主要任务：写文档、做表、剪视频、开会</li>
                   <li>硬条件：重量、接口、必须能跑的软件</li>
@@ -509,7 +507,7 @@ export function SessionApp() {
           </section>
 
           <section id="candidates" className="report-section" aria-labelledby="candidates-title">
-            <SectionHead no="03" title="候选与取舍" aside={candidates.length ? `${candidates.length} 个候选` : "暂无"} />
+            <SectionHead id="candidates-title" title="看见差异，再做选择。" description="适合的地方、需要的取舍，以及还没确认的信息，都放在这里。" aside={candidates.length ? `${candidates.length} 个候选` : undefined} />
             {snap.candidates.stale && <p className="alert alert-warn">候选评价基于旧需求，等待重新评估。</p>}
             {candidates.length === 0 ? (
               <div className="empty-state">
@@ -525,7 +523,7 @@ export function SessionApp() {
                     <p>{c.comparisonReason}</p>
                     {([["满足", c.satisfied], ["不满足", c.unmet], ["取舍", c.compromises], ["未知（不视为满足）", c.unknowns]] as const).map(([label, rows]) => rows.length > 0 && (
                       <div key={label}><strong>{label}</strong><ul>{rows.map((r) => <li key={r.criterionId}>{r.text}{"hard" in r && r.hard ? "（硬条件）" : ""}
-                        {r.evidence.map((e, i) => <small className="muted" key={i}>　来源：{e.source.title}{e.excerpt ? `；原文：${e.excerpt}` : ""}</small>)}</li>)}</ul></div>
+                        {r.evidence.length > 0 && <details className="evidence-inline"><summary>查看资料依据</summary>{r.evidence.map((e, i) => <small className="muted" key={i}>{e.source.title}{e.excerpt ? `：${e.excerpt}` : ""}</small>)}</details>}</li>)}</ul></div>
                     ))}
                   </article>
                 ))}
@@ -534,7 +532,7 @@ export function SessionApp() {
           </section>
 
           <section id="experience" className="report-section" aria-labelledby="experience-title">
-            <SectionHead no="04" title="场景体验" aside={assigned.length ? `${assigned.length} 个方案任务` : "通用说明性体验"} />
+            <SectionHead id="experience-title" title="走进场景，亲手试一试。" description="把抽象的功能，放回真实的使用问题。以下为虚拟流程演示。" aside={assigned.length ? `${assigned.length} 个方案任务` : "通用说明性体验"} />
             {active ? (
               <SceneTask
                 view={active}
@@ -550,7 +548,7 @@ export function SessionApp() {
                     space={{ ...showroomSpace, hotspots: usableHotspots }}
                     view={view}
                     onView={(v) => { setView(v); localStorage.setItem(VIEW_KEY, JSON.stringify(v)); }}
-                    onEnter={(h) => { if (h.target.type === "scene") enter(h.target.sceneId); else document.getElementById("plan")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                    onEnter={(h) => { if (h.target.type === "scene") enter(h.target.sceneId); else document.getElementById(h.target.activity === "compare" ? "candidates" : "plan")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
                     recommendedSceneIds={assigned.map((e) => e.sceneId)}
                     doneSceneIds={instances.filter((v) => v.experience.completion === "walkthrough_completed").map((v) => v.instance.sceneId)}
                   />
@@ -567,7 +565,7 @@ export function SessionApp() {
                   </div>
                   {catalog.length === 0 && <p className="muted small">当前没有注册场景。</p>}
                   <figure className="scene-visual">
-                    <img src="/media/scene-multidevice.png" alt="多设备协同办公的场景示意" width={393} height={288} />
+                    <img src="/media/huawei-continuity.png" alt="电脑与手机协同使用的场景示意" width={393} height={288} loading="lazy" />
                     <figcaption>{MEDIA_CREDIT}</figcaption>
                   </figure>
                   <p className="muted small">方案任务优先显示；其他任务只是说明性浏览，不是个性化推荐。</p>
@@ -577,7 +575,7 @@ export function SessionApp() {
           </section>
 
           <section id="plan" className="report-section" aria-labelledby="plan-title">
-            <SectionHead no="05" title="个人方案" aside={currentPlan ? `方案 v${currentPlan.version}` : "尚未生成"} />
+            <SectionHead id="plan-title" title="把想法，留成自己的方案。" description="需求与体验都保留在这里，方便下次继续比较。" aside={currentPlan ? `方案 v${currentPlan.version}` : undefined} />
             {currentPlan ? (
               <>
                 <div className="report-card">
@@ -624,7 +622,7 @@ export function SessionApp() {
               </div>
             )}
 
-            <div className="report-grid-2">
+            <details className="plan-details"><summary>反馈与方案更新记录<span>{snap.feedback.length + snap.impacts.length} 条</span></summary><div className="report-grid-2">
               <div className="report-card">
                 <h3>明确反馈</h3>
                 {snap.feedback.length ? <ul>{snap.feedback.map((f) => <li key={f.feedbackId}>{f.text} <small className="muted">({f.kind})</small></li>)}</ul> : <p className="muted small">尚未提交反馈。在场景里提交的明确反馈会出现在这里。</p>}
@@ -633,23 +631,27 @@ export function SessionApp() {
                 <h3>方案更新记录</h3>
                 {snap.impacts.length ? <ul>{snap.impacts.map((i) => <li key={i.impactId}>{i.summary}</li>)}</ul> : <p className="muted small">还没有影响分析记录。</p>}
               </div>
-            </div>
+            </div></details>
 
-            <div className="report-card">
-              <h3>保存与能力</h3>
+            <div className="report-card plan-save">
+              <div><h3>为下一次选择，保留这份思考。</h3>
+              <p className="muted">可导出只读方案快照；互动体验仍需要连接当前服务。</p></div>
+              {currentPlan ? <a className="btn primary" href={`${API_PATHS.sessionExport(snap.sessionId)}?format=recovery_html`}>导出只读方案</a> : <button type="button" className="btn primary" disabled>生成方案后可导出</button>}
+            </div>
+            <details className="plan-details"><summary>保存方式与服务说明</summary>
               <p className="small">会话由本地服务端保存；本浏览器只记住会话编号和全景朝向。跨设备自动续接取决于服务端能力声明。</p>
               <ul className="capability-list">
                 {snap.capabilities.declarations.map((d) => (
-                  <li key={d.id}><strong>{d.id}：</strong>{d.statement}{d.status !== "supported" && <small className="muted">（{d.status === "unsupported" ? "不支持" : "有条件"}）</small>}</li>
+                  <li key={d.id}><strong>{CAPABILITY_LABEL[d.id] ?? d.id}：</strong>{d.statement}{d.status !== "supported" && <small className="muted">（{d.status === "unsupported" ? "不支持" : "有条件"}）</small>}</li>
                 ))}
               </ul>
-              <a className="btn" href={`${API_PATHS.sessionExport(snap.sessionId)}?format=recovery_html`}>导出只读恢复 HTML</a>
-            </div>
+            </details>
           </section>
 
           <footer className="report-footer">
             <div className="report-footer-inner">
               <p>场景完成只表示走完流程演示，不代表在真实设备上测试通过。</p>
+              <p>{MEDIA_CREDIT}</p>
               <p>{snap.isMock ? "本页含模拟内容。" : "资料来自本地知识库，非实时更新。"} · <a href="#top">回到顶部</a></p>
             </div>
           </footer>
