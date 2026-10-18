@@ -80,6 +80,13 @@ function loadForWrite(deps: SessionServiceDeps, sessionId: string, baseRevision:
 }
 
 function commit(deps: SessionServiceDeps, rec: SessionRecord): void {
+  // 写入前再比对一次存储里的 revision：读入之后若有其他写入落盘，本次写入基于过期数据，必须拒绝而不是覆盖。
+  const stored = deps.store.load(rec.sessionId);
+  if (stored && stored.revision !== rec.revision) {
+    throw new SessionError("stale_revision", `会话已被其他操作更新（当前 revision=${stored.revision}），本次写入已放弃`, {
+      snapshot: buildSnapshot(stored, deps),
+    });
+  }
   rec.revision += 1;
   rec.updatedAt = now();
   try {
@@ -357,7 +364,7 @@ export function confirmNeeds(
   const t = now();
   const target = rec.needVersions.find((v) => v.version === needVersion);
   if (!target) throw new SessionError("not_found", `需求版本 ${needVersion} 不存在`);
-  if (target.fingerprint !== fingerprint) {
+  if (target.version !== rec.needVersions.at(-1)!.version || target.fingerprint !== fingerprint) {
     throw new SessionError("confirm_rejected", "摘要已更新，不是你看到的那一版", { reason: "stale_summary" as ConfirmRejectReason, snapshot: buildSnapshot(rec, deps) });
   }
   const summary = buildNeedSummary(target, rec.confirmations);
@@ -513,7 +520,17 @@ export async function composePlan(sessionId: string, baseRevision: number, deps:
     isMock: rec.usedMock.engine || rec.usedMock.knowledge || rec.usedMock.data || newInstances.some((i) => i.evidenceSnapshot.isMock),
   };
 
-  for (const old of rec.plans) if (old.status === "current") old.status = "superseded";
+  for (const old of rec.plans) {
+    if (old.status !== "current") continue;
+    old.status = "superseded";
+    // 旧方案的个人实例随方案一起被取代，否则“打开任务”和“已体验”会落到旧版本上。
+    for (const i of rec.instances) {
+      if (i.mode === "personal" && i.planVersion === old.version && i.status === "active") {
+        i.status = "superseded";
+        i.invalidReason = `已由方案 v${version} 取代`;
+      }
+    }
+  }
   rec.plans.push(plan);
   rec.planNotes = planNotes.map((text) => ({ at: t, text }));
   rec.audit.push({ at: t, type: "plan_composed", detail: `v${version}；${newInstances.length} 个场景` });
@@ -852,8 +869,8 @@ function markPlansForReview(rec: SessionRecord): number[] {
 
 /* ------------------------------ 恢复 ------------------------------ */
 
-export function resumeSession(sessionId: string, deps: SessionServiceDeps): SessionSnapshot {
-  const rec = loadForWrite(deps, sessionId, undefined);
+export function resumeSession(sessionId: string, baseRevision: number | undefined, deps: SessionServiceDeps): SessionSnapshot {
+  const rec = loadForWrite(deps, sessionId, baseRevision);
   if (rec.runState.state === "failed") {
     rec.runState = { state: "idle", at: now() };
     rec.audit.push({ at: now(), type: "session_resumed" });
@@ -1151,32 +1168,33 @@ export class SessionManager {
     return this.run(sessionId, () => handleAnswers(sessionId, answers, freeText, baseRevision, this.deps));
   }
 
-  editNeeds(sessionId: string, edits: NeedEdit[], baseRevision: number): SessionSnapshot {
-    return editNeedsDirect(sessionId, edits, baseRevision, this.deps);
+  // 所有写操作都进同一条会话队列：同步写也必须排在正在等待模型的异步写之后，否则会互相覆盖。
+  editNeeds(sessionId: string, edits: NeedEdit[], baseRevision: number): Promise<SessionSnapshot> {
+    return this.run(sessionId, async () => editNeedsDirect(sessionId, edits, baseRevision, this.deps));
   }
 
-  confirm(sessionId: string, needVersion: number, fingerprint: string, baseRevision?: number): { duplicate: boolean; snapshot: SessionSnapshot } {
-    return confirmNeeds(sessionId, needVersion, fingerprint, baseRevision, this.deps);
+  confirm(sessionId: string, needVersion: number, fingerprint: string, baseRevision?: number): Promise<{ duplicate: boolean; snapshot: SessionSnapshot }> {
+    return this.run(sessionId, async () => confirmNeeds(sessionId, needVersion, fingerprint, baseRevision, this.deps));
   }
 
   compose(sessionId: string, baseRevision: number): Promise<SessionSnapshot> {
     return this.run(sessionId, () => composePlan(sessionId, baseRevision, this.deps));
   }
 
-  explore(sessionId: string, sceneId: string, version: number | undefined, baseRevision?: number): SessionSnapshot {
-    return exploreScene(sessionId, sceneId, version, baseRevision, this.deps);
+  explore(sessionId: string, sceneId: string, version: number | undefined, baseRevision?: number): Promise<SessionSnapshot> {
+    return this.run(sessionId, async () => exploreScene(sessionId, sceneId, version, baseRevision, this.deps));
   }
 
-  action(sessionId: string, instanceId: string, actionId: string, baseRevision?: number): SessionSnapshot {
-    return applySceneAction(sessionId, instanceId, actionId, baseRevision, this.deps);
+  action(sessionId: string, instanceId: string, actionId: string, baseRevision?: number): Promise<SessionSnapshot> {
+    return this.run(sessionId, async () => applySceneAction(sessionId, instanceId, actionId, baseRevision, this.deps));
   }
 
   feedback(sessionId: string, input: FeedbackRequestBody & { baseRevision: number }): Promise<SessionSnapshot> {
     return this.run(sessionId, () => submitFeedback(sessionId, input, input.baseRevision, this.deps));
   }
 
-  resume(sessionId: string): SessionSnapshot {
-    return resumeSession(sessionId, this.deps);
+  resume(sessionId: string, baseRevision?: number): Promise<SessionSnapshot> {
+    return this.run(sessionId, async () => resumeSession(sessionId, baseRevision, this.deps));
   }
 
   export(sessionId: string, planVersion?: number): RecoveryPack {

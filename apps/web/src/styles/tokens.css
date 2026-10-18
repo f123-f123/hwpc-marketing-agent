@@ -1,69 +1,78 @@
 /**
  * 设计 token：全站唯一来源。
- * 组件样式里不要出现本文件之外的色值、字号、间距、圆角；新增视觉值先加到这里。
- * 当前产品只有浅色主题，因此不提供 .dark 变量；若将来支持深色模式，在此补一套并保持同样的 token 名。
+ * base.css / app.css 里只引用这里的变量；新增视觉值先加到这里，不在组件样式里写裸色值或裸字号。
+ * 当前只有浅色主题；若将来支持深色模式，在此补一套同名变量即可。
  */
 :root {
-  /* 颜色：1 个主色 + 中性灰阶 + 语义色 */
-  --color-bg: #f7f8fa;
+  /* 颜色：1 个品牌色 + 中性灰阶 + 3 个语义色（只表达状态，不做装饰） */
+  --color-bg: #f4f5f7;
   --color-surface: #ffffff;
-  --color-surface-muted: #f0f1f3;
-  --color-fg: #202124;
-  --color-muted-fg: #686b73;
-  --color-border: #e2e3e7;
-  --color-primary: #bb2632;
-  --color-primary-hover: #991e29;
-  --color-primary-fg: #ffffff;
-  --color-primary-weak: #f9ecee;
-  --color-success: #12703a;
-  --color-warning: #8a4b00;
-  --color-warning-weak: #fff6e0;
-  --color-danger: #a3202b;
-  --color-danger-weak: #fdecee;
+  --color-surface-muted: #f0f1f4;
+  --color-surface-sunken: #e9ebef;
+  --color-fg: #1b1d21;
+  --color-fg-secondary: #4a4f58;
+  --color-muted-fg: #6a707b;
+  --color-border: #e2e4e9;
+  --color-border-strong: #c9cdd5;
 
-  /* 字号阶梯：12 / 14 / 16 / 20 / 24 / 32 */
+  --color-primary: #c7000b;
+  --color-primary-hover: #a5000a;
+  --color-primary-fg: #ffffff;
+  --color-primary-weak: #fdf0f0;
+  --color-primary-line: #f3c4c6;
+
+  --color-success: #12773b;
+  --color-success-weak: #e8f5ed;
+  --color-warning: #8f5300;
+  --color-warning-weak: #fff4de;
+  --color-warning-line: #f0d39a;
+  --color-danger: #b4232b;
+  --color-danger-weak: #fdeced;
+  --color-danger-line: #f2b8bc;
+
+  /* 字号阶梯：正文 14，最小 12（中文低于 12px 不可读） */
   --text-xs: 12px;
-  --text-sm: 14px;
-  --text-md: 16px;
-  --text-lg: 20px;
-  --text-xl: 24px;
-  --text-2xl: 32px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --text-display: clamp(28px, 3.2vw, 40px);
+  --leading-tight: 1.35;
+  --leading-normal: 1.7;
+  --weight-normal: 400;
+  --weight-strong: 600;
 
   /* 间距：4px 基准 */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --space-9: 64px;
 
-  /* 圆角：3 档，全站不混用 */
+  /* 圆角 */
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
 
-  /* 阴影：1 档；层级优先用 1px 边框 */
-  --shadow-1: 0 1px 2px rgba(28, 35, 51, 0.06);
+  /* 阴影：层级优先靠边框，阴影只给浮起的元素 */
+  --shadow-1: 0 1px 2px rgb(20 24 31 / 6%);
+  --shadow-2: 0 6px 24px rgb(20 24 31 / 8%);
+  --focus-ring: 0 0 0 3px rgb(199 0 11 / 18%);
 
-  /* 布局宽度 */
+  /* 布局 */
   --content-max: 1200px;
-  --reading-max: 760px;
-  --topbar-h: 68px;
-  --font-ui: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  --text-display: clamp(38px, 4.4vw, 68px);
-  --text-section: clamp(27px, 2.6vw, 38px);
-  --section-space: clamp(64px, 7vw, 108px);
-  --color-glass: rgb(255 255 255 / 90%);
-  --color-paper: #ffffff;
-  --color-soft-ink: #43464c;
+  --topbar-h: 56px;
+  --chat-w: minmax(360px, 440px);
+  --font-ui: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 
-  /* 暗色叙事区（页面 hero）专用；正文区域仍使用浅色 token */
-  --color-hero-bg: #0b0d12;
-  --color-hero-fg: #f7f8fb;
-  --color-hero-muted: #a6adbd;
-  --color-hero-line: #23262f;
+  --duration-fast: 0.15s;
 }
 
 /* 动效只用于状态反馈；尊重系统的减少动态偏好 */
@@ -74,5 +83,6 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

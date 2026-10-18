@@ -21,11 +21,11 @@ describe("会话确认、场景动作与文件恢复", () => {
       expect(snap.needs.summary.confirmable).toBe(true);
       expect(snap.plan.canCompose).toBe(false);
       await expect(manager.compose(snap.sessionId, snap.revision)).rejects.toMatchObject({ code: "needs_confirmation" });
-      expect(() => manager.confirm(snap.sessionId, snap.needs.version, "old", snap.revision)).toThrow("摘要已更新");
-      const confirmed = manager.confirm(snap.sessionId, snap.needs.version, snap.needs.summary.fingerprint, snap.revision);
+      await expect(manager.confirm(snap.sessionId, snap.needs.version, "old", snap.revision)).rejects.toThrow("摘要已更新");
+      const confirmed = await manager.confirm(snap.sessionId, snap.needs.version, snap.needs.summary.fingerprint, snap.revision);
       expect(confirmed.duplicate).toBe(false);
       snap = confirmed.snapshot;
-      expect(manager.confirm(snap.sessionId, snap.needs.version, snap.needs.summary.fingerprint, snap.revision).duplicate).toBe(true);
+      expect((await manager.confirm(snap.sessionId, snap.needs.version, snap.needs.summary.fingerprint, snap.revision)).duplicate).toBe(true);
       snap = await manager.compose(snap.sessionId, snap.revision);
       expect(snap.plan.current?.needVersion).toBe(snap.needs.version);
       const planVersion = snap.plan.current!.version;
@@ -34,7 +34,7 @@ describe("会话确认、场景动作与文件恢复", () => {
       snap = await manager.explore(snap.sessionId, "mock-commute-day", 1, snap.revision);
       const instance = snap.scenes.instances.at(-1)!.instance;
       const beforeNeed = snap.needs.version;
-      snap = manager.action(snap.sessionId, instance.instanceId, "go_meeting", snap.revision);
+      snap = await manager.action(snap.sessionId, instance.instanceId, "go_meeting", snap.revision);
       expect(snap.needs.version).toBe(beforeNeed);
       expect(snap.scenes.instances.at(-1)!.experience.currentStateId).toBe("meeting");
       snap = await manager.feedback(snap.sessionId, { kind: "change_need", text: "以后主要剪视频", needKey: "task", entryId: snap.needs.entries.find((e) => e.key === "task")!.entryId, baseRevision: snap.revision });

@@ -7,5 +7,5 @@
     "baseUrl": ".",
     "paths": { "@hwpc/scenes": ["../../scenes/src/index.ts"] }
   },
-  "include": ["src", "build", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "test", "vite.config.ts"]
 }

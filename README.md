@@ -26,7 +26,7 @@
 
 ```text
 apps/web（React + Vite）
-  SessionApp：沟通 / 摘要 / 确认 / 候选 / 方案 / 全景 / 场景 / 反馈 / 导出
+  工作台：左侧对话常驻，右侧 需求 / 候选 / 体验（全景 + 场景任务）/ 方案（反馈、导出）
         │ /api（Vite 代理到 8787）
 apps/server（Hono）
   SessionManager：用例编排、revision 门控、同会话串行写
@@ -121,7 +121,7 @@ npm run dev
 code/
 ├─ apps/
 │  ├─ server/           Hono 服务、会话用例、场景注册表、文件存储、模型客户端
-│  └─ web/              React 前端：SessionApp、Panorama、场景任务、导出
+│  └─ web/              React 前端：首页、工作台（对话 + 分页面板）、全景、场景任务、导出
 ├─ packages/
 │  ├─ contracts/        zod 契约、需求/确认/方案/场景/恢复包、一致性检查
 │  ├─ data/             本地知识库、ima OpenAPI、设备知识

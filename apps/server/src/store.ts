@@ -3,7 +3,11 @@ import path from "node:path";
 import { SessionRecordSchema, type SessionRecord } from "@hwpc/contracts";
 
 export class StorageError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** invalid_id：编号本身不合法（对外按“不存在”处理）；io：文件读写或格式问题。 */
+    public readonly kind: "invalid_id" | "io" = "io",
+  ) {
     super(message);
     this.name = "StorageError";
   }
@@ -53,7 +57,7 @@ export class FileSessionStore implements SessionStore {
   }
 
   private file(id: string): string {
-    if (!SAFE_ID.test(id)) throw new StorageError(`非法的会话编号: ${id}`);
+    if (!SAFE_ID.test(id)) throw new StorageError(`会话 ${id} 不存在`, "invalid_id");
     return path.join(this.dir, `${id}.json`);
   }
 

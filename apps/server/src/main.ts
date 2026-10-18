@@ -52,5 +52,6 @@ serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[server] ima 凭证: ${cfg.ima.clientId ? `ClientID ${maskSecret(cfg.ima.clientId)}` : "未设置"}；模型: ${cfg.model.name ?? "未配置"}`);
   console.log("[server] 顾问引擎: 模拟引擎（fixtures，isMock=true）。真实模型引擎尚未接入，界面会标注模拟。");
   for (const s of statuses) console.log(`[server] 资料源 ${s.origin}: ${s.state} — ${s.message}`);
+  if (!activeOrigin) console.warn(`[server] 警告：dataMode=${cfg.dataMode} 下没有已连接的资料源，检索会失败；请检查 LOCAL_KB_DIR 或 ima 凭证，或改用 DATA_SOURCE_MODE=mock 演示。`);
   if (registry.loadErrors.length) console.log(`[server] 场景注册告警 ${registry.loadErrors.length} 条：${registry.loadErrors.slice(0, 3).join("；")}`);
 });

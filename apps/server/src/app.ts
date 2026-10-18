@@ -26,6 +26,7 @@ import { renderExport } from "./export.js";
 import { renderRecoveryHtml } from "./recoveryHtml.js";
 import { TaskError, type TaskManager } from "./tasks.js";
 import { SessionError } from "./errors.js";
+import { StorageError } from "./store.js";
 import type { SessionManager } from "./sessions.js";
 
 export interface AppDeps {
@@ -43,6 +44,8 @@ function fail(c: Context, code: ApiErrorCode, message: string, details?: unknown
   return c.json({ error: { code, message, details } }, API_ERROR_HTTP_STATUS[code] as 400);
 }
 
+const ResumeRequestSchema = z.object({ baseRevision: z.number().int().nonnegative().optional() });
+
 class ValidationFailure extends Error {
   constructor(public zod: z.ZodError) {
     super("请求不合法");
@@ -59,6 +62,7 @@ export function createApp(deps: AppDeps) {
     if (err instanceof SessionError) return fail(c, err.code, err.message, err.details);
     if (err instanceof DataServiceError) return fail(c, "data_unavailable", err.message, { code: err.code, origin: err.origin });
     if (err instanceof ModelServiceError) return fail(c, "model_unavailable", err.message, { code: err.code });
+    if (err instanceof StorageError) return err.kind === "invalid_id" ? fail(c, "not_found", err.message) : fail(c, "storage_error", err.message);
     if (err instanceof SyntaxError) return fail(c, "validation_error", "请求体不是合法 JSON");
     console.error("[server] 未处理异常:", err instanceof Error ? err.message : err);
     return fail(c, "internal_error", "服务内部错误");
@@ -70,13 +74,21 @@ export function createApp(deps: AppDeps) {
     return r.data;
   };
 
+  /** 请求体可以为空（旧客户端不发 body）。 */
+  const optionalBody = async <T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> => {
+    const text = await c.req.text();
+    const r = schema.safeParse(text.trim() ? JSON.parse(text) : {});
+    if (!r.success) throw new ValidationFailure(r.error);
+    return r.data;
+  };
+
   app.get(API_PATHS.health, (c) => c.json({ ok: true, version: deps.version ?? "0.1.0" }));
 
   app.get(API_PATHS.status, async (c) => {
     const [sources, model] = await Promise.all([deps.data.getStatus(), deps.model.getStatus()]);
     const active = deps.dataMode === "auto" || !deps.dataMode
       ? sources.find((s) => s.origin === "ima" && s.state === "connected") ?? sources.find((s) => s.origin === "local" && s.state === "connected")
-      : sources.find((s) => s.origin === deps.dataMode);
+      : sources.find((s) => s.origin === deps.dataMode && s.state === "connected");
     const status: ConnectionStatus = {
       activeDataOrigin: active?.origin ?? "mock",
       sources,
@@ -106,13 +118,13 @@ export function createApp(deps: AppDeps) {
     app.get("/api/sessions/:id", (c) => c.json(s.get(c.req.param("id"))));
     app.post("/api/sessions/:id/messages", async (c) => { const b = await body(c, MessageRequestSchema); return c.json(await s.message(c.req.param("id"), b.text, b.baseRevision)); });
     app.post("/api/sessions/:id/answers", async (c) => { const b = await body(c, AnswersRequestSchema); return c.json(await s.answer(c.req.param("id"), b.answers, b.freeText, b.baseRevision)); });
-    app.post("/api/sessions/:id/needs", async (c) => { const b = await body(c, NeedEditRequestSchema); return c.json(s.editNeeds(c.req.param("id"), b.edits, b.baseRevision)); });
-    app.post("/api/sessions/:id/confirm", async (c) => { const b = await body(c, ConfirmRequestSchema); return c.json(s.confirm(c.req.param("id"), b.needVersion, b.fingerprint, b.baseRevision)); });
+    app.post("/api/sessions/:id/needs", async (c) => { const b = await body(c, NeedEditRequestSchema); return c.json(await s.editNeeds(c.req.param("id"), b.edits, b.baseRevision)); });
+    app.post("/api/sessions/:id/confirm", async (c) => { const b = await body(c, ConfirmRequestSchema); return c.json(await s.confirm(c.req.param("id"), b.needVersion, b.fingerprint, b.baseRevision)); });
     app.post("/api/sessions/:id/plan", async (c) => { const b = await body(c, ComposePlanRequestSchema); return c.json(await s.compose(c.req.param("id"), b.baseRevision)); });
     app.post("/api/sessions/:id/explore", async (c) => { const b = await body(c, ExploreRequestSchema); return c.json(await s.explore(c.req.param("id"), b.sceneId, b.version, b.baseRevision)); });
-    app.post("/api/sessions/:id/instances/:instanceId/actions", async (c) => { const b = await body(c, SceneActionRequestSchema); return c.json(s.action(c.req.param("id"), c.req.param("instanceId"), b.actionId, b.baseRevision)); });
+    app.post("/api/sessions/:id/instances/:instanceId/actions", async (c) => { const b = await body(c, SceneActionRequestSchema); return c.json(await s.action(c.req.param("id"), c.req.param("instanceId"), b.actionId, b.baseRevision)); });
     app.post("/api/sessions/:id/feedback", async (c) => c.json(await s.feedback(c.req.param("id"), await body(c, FeedbackRequestSchema))));
-    app.post("/api/sessions/:id/resume", (c) => c.json(s.resume(c.req.param("id"))));
+    app.post("/api/sessions/:id/resume", async (c) => { const b = await optionalBody(c, ResumeRequestSchema); return c.json(await s.resume(c.req.param("id"), b.baseRevision)); });
     app.get("/api/sessions/:id/export", (c) => {
       const q = SessionExportQuerySchema.safeParse({ format: c.req.query("format"), planVersion: c.req.query("planVersion") });
       if (!q.success) return fail(c, "validation_error", "导出参数不合法", q.error.issues);
