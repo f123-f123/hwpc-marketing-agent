@@ -21,39 +21,90 @@ const categoryFor = (heading: string): FactCategory => {
   return "other";
 };
 
+/**
+ * 官网规格表被抓成“字段名一行、值一行”的纯文本。只有在这张表里的行才当字段名，
+ * 其余短行（“华为分享”“锂聚合物”）都是取值；漏掉字段名会让后面的值串到上一个字段。
+ */
+const FIELD_LABELS = new Set(["尺寸", "类型", "宽度", "长度", "深度", "高度", "厚度", "重量", "屏占比", "屏幕比例", "分辨率", "刷新率", "亮度", "峰值亮度", "色域", "色准", "色深", "对比度", "可视角度", "触摸屏",
+  "WLAN", "蓝牙", "星闪", "NFC", "接口", "摄像头", "麦克风", "扬声器", "材料", "电池容量", "额定容量", "容量", "处理器", "CPU", "GPU", "NPU", "集成显卡", "独立显卡", "内存", "存储", "颜色", "操作系统", "电源键"]);
+/** 页尾外链弹窗（“即将离开…/继续访问/取消”）：出现后到本段结束都是网页残留。 */
+const PAGE_RESIDUE = /即将离开\s*consumer\.huawei\.com|跳转至第三方页面/;
+/** 版本小标题。“标准版：”只管到本字段结束；“HUAWEI … 版”“Windows 版”管到下一个同类小标题或本段结束。 */
+const FIELD_VARIANT = /^(.{1,40}?版)\s*[：:]$/;
+const BLOCK_VARIANT = /^(HUAWEI\s.+版|(?:Windows|Linux)(?:\s*V\d+)?\s*版)$/;
+const ONLY_VARIANT = /仅.{1,20}版/;
+const PLANE = new Set(["长度", "宽度", "深度"]);
+const THICK = new Set(["厚度", "高度"]);
+
+/** 笔记本长、宽、深不会小于 100 mm，厚、高不会超过 40 mm；违背说明原文标签与数值错位，整组不能当已核实事实。 */
+function flagMisalignedDimensions(facts: FactRecord[]) {
+  const groups = new Map<string, FactRecord[]>();
+  for (const f of facts) {
+    const [section, label] = f.field.split("·");
+    if (label && (PLANE.has(label) || THICK.has(label))) groups.set(section!, [...(groups.get(section!) ?? []), f]);
+  }
+  for (const group of groups.values()) {
+    const wrong = group.some(f => {
+      const label = f.field.split("·")[1]!;
+      return [...f.value.matchAll(/(\d+(?:\.\d+)?)\s*mm/g)].some(m => THICK.has(label) ? Number(m[1]) > 40 : Number(m[1]) < 100);
+    });
+    if (!wrong) continue;
+    for (const f of group) { f.reviewStatus = "pending_review"; f.qualifiers.push("原文尺寸标签与数值疑似错位，需人工核对后使用"); }
+  }
+}
+
 export function parseFacts(markdown: string, product: ProductIdentity, source: SourceRef): FactRecord[] {
   const lines = markdown.replace(/\r/g, "").split("\n");
   let section = "";
   let field = "";
+  let blockVariant = "";
+  /** 版本小标题下紧跟的是字段名（整张子表属于该版本）还是直接取值（只管这几行，遇到字段名即结束）。 */
+  let blockHolds = "" as "" | "labels" | "values"; // push() 里会改成 "values"，不让 TS 按初值收窄
+  let fieldVariant = "";
+  let residue = false;
+  /** 当前字段 / 版本下第一条事实的下标：脚注作用于这一组取值。 */
+  let group = 0;
   let n = 0;
   const facts: FactRecord[] = [];
   const capturedAt = markdown.match(/抓取日期[：:]\s*(\d{4}-\d{2}-\d{2})/)?.[1];
   const officialUrl = markdown.match(/https:\/\/consumer\.huawei\.com\/[^\s)]+/)?.[0];
   const actualSource = { ...source, ...(capturedAt ? { capturedAt } : {}), ...(officialUrl ? { officialUrl } : {}) };
   const commonQualifier = /配置可能因销售版本而异/.test(markdown) ? ["具体参数因销售版本而异，以实际销售版本为准"] : [];
+  const push = (fieldName: string, value: string) => {
+    if (blockVariant && !blockHolds) blockHolds = "values";
+    const scope = [blockVariant, fieldVariant].filter(Boolean).map(v => `仅 ${v}`);
+    facts.push({ factId: stableId("fact", `${source.locator}:${n++}`), productId: product.productId, configurationIds: [], category: categoryFor(section), field: fieldName, value, qualifiers: [...commonQualifier, ...scope], source: actualSource, reviewStatus: ONLY_VARIANT.test(value) ? "pending_review" : "verified" });
+  };
   for (const raw of lines) {
     const line = raw.trim();
-    if (line.startsWith("## ")) { section = line.slice(3); field = ""; continue; }
+    if (line.startsWith("## ")) { section = line.slice(3); field = blockVariant = fieldVariant = blockHolds = ""; residue = false; group = facts.length; continue; }
+    if (residue || PAGE_RESIDUE.test(line)) { residue = true; continue; }
     if (!section || section === "来源" || !line || line.startsWith("#") || line.startsWith("|")) continue;
     if (line.startsWith("*") || line.startsWith(">")) {
       if (facts.length && line.startsWith("*")) {
-        facts[facts.length - 1]!.qualifiers.push(line.slice(1).trim());
-        if (/仅.{1,20}版/.test(line)) facts[facts.length - 1]!.reviewStatus = "pending_review";
+        const targets = facts.length > group ? facts.slice(group) : facts.slice(-1);
+        for (const f of targets) {
+          f.qualifiers.push(line.slice(1).trim());
+          if (ONLY_VARIANT.test(line)) f.reviewStatus = "pending_review";
+        }
       }
       continue;
     }
-    if (/^[-•]\s/.test(line)) {
-      const value = line.replace(/^[-•]\s*/, "");
-      facts.push({ factId: stableId("fact", `${source.locator}:${n++}`), productId: product.productId, configurationIds: [], category: categoryFor(section), field: section, value, qualifiers: [...commonQualifier], source: actualSource, reviewStatus: /仅.{1,20}版/.test(value) ? "pending_review" : "verified" });
-      continue;
+    if (/^[-•]\s/.test(line)) { push(section, line.replace(/^[-•]\s*/, "")); continue; }
+    if (FIELD_LABELS.has(line)) {
+      if (blockVariant && !blockHolds) blockHolds = "labels";
+      else if (blockHolds === "values") blockVariant = blockHolds = "";
+      field = line; fieldVariant = ""; group = facts.length; continue;
     }
-    if (/^(尺寸|类型|宽度|长度|深度|高度|厚度|重量|屏占比|屏幕比例|分辨率|亮度|色域|对比度|可视角度|触摸屏|WLAN|蓝牙|接口|摄像头|麦克风|扬声器|电池容量|额定容量|容量|处理器|内存|存储|颜色|操作系统)$/.test(line)) {
-      field = line;
-      continue;
+    if (!/系统/.test(section)) {
+      const fv = FIELD_VARIANT.exec(line)?.[1];
+      if (fv) { fieldVariant = fv.trim(); group = facts.length; continue; }
+      if (BLOCK_VARIANT.test(line)) { blockVariant = line; blockHolds = fieldVariant = ""; group = facts.length; continue; }
     }
     if (/^https?:/.test(line)) continue;
-    facts.push({ factId: stableId("fact", `${source.locator}:${n++}`), productId: product.productId, configurationIds: [], category: categoryFor(section), field: field ? `${section}·${field}` : section, value: line, qualifiers: [...commonQualifier], source: actualSource, reviewStatus: /仅.{1,20}版/.test(line) ? "pending_review" : "verified" });
+    push(field ? `${section}·${field}` : section, line);
   }
+  flagMisalignedDimensions(facts);
   return facts;
 }
 

@@ -37,8 +37,7 @@
 ## 三、当前代码状态
 
 - 仓库：`E:\Claude\黑客松_华为\code`（npm workspaces，Node ≥ 20，TypeScript，React 19 + Vite 7，Hono 服务端，vitest）。
-- 分支：`refactor/overhaul`（main 之上）。已提交 `8381efd`（会话一致性修复 + 前端重写）。
-- **推文模块（第二阶段）全部未提交**：约 28 个文件，见 `git status`。验证状态：72 个测试通过、全仓 typecheck 通过、生产构建通过、已用本地知识库 + 无头 Chrome 走通全流程截图。
+- 分支：`refactor/overhaul`（main 之上）。已提交 `8381efd`（会话一致性修复 + 前端重写）、`cbfccb7`（推文模块，第二阶段），之后是资料解析修复。均未推送。
 
 ### 模块地图
 
@@ -73,8 +72,10 @@ fixtures             MOCK 数据与模拟顾问引擎
 
 ## 四、已知问题与待办（按优先级）
 
-1. **资料解析 bug（重要，影响困境 3）**：`packages/data` 本地知识库表格解析会列错位、把表头和网页残留当参数，并标为 verified。例：MateBook D 14 “厚度 = 227.79 mm”“长度 = 15.9 mm”；“处理器 = CPU”“电池 = 材料”“包装清单 = 继续访问”。推文侧已在 `content/facts.ts` 加过滤与尺寸合理性检查作为防线，**根本修复应在解析器**。待用户决定是否修。
-2. 是否提交推文模块（未提交，等用户确认）。
+1. ~~资料解析 bug~~ 已在 `packages/data/src/local.ts` 的 `parseFacts` 修复（测试 `packages/data/test/parse-facts.test.ts`）：字段名表补全（CPU / 材料 / 刷新率 / 色准 / 色深 / 星闪 / NFC 等），页尾外链弹窗文字截断，版本小标题（“HUAWEI … SE 版”“标准版：”“Windows 版：”）作为“仅 X 版”限定条件，脚注作用于整组取值，尺寸标签与数值错位时整组标 pending_review。
+   **知识库原文本身有错**：MateBook D 14 / D 16 / D 16 SE 版 / X 系列 的 `产品事实.md` 与 `00-全库横向索引/尺寸重量矩阵.csv` 中长、宽、厚标签错位（如 D 14 “长度 15.9 mm、厚度 227.79 mm”），解析器只能标待审核，不能替原文改值；需对照官网修正知识库。`content/facts.ts` 的过滤保留为第二道防线。
+   副作用：带“仅限 Windows 版本”脚注的整组事实（如 D 14 两款处理器、特色应用）现在都是 pending_review，推文不会引用；是否放宽待定。
+2. ~~是否提交推文模块~~ 已提交 `cbfccb7`。
 3. 公众号接口需用真实 AppID / AppSecret + IP 白名单联调。
 4. 选购顾问接入真实大模型：按 `packages/contracts/src/advisor.ts` 的 `AdvisorEngine`（respond / answer / interpretFeedback / composePlan）实现，在 `apps/server/src/main.ts` 替换 `createMockAdvisorEngine()`；`packages/agent` 的 `Consultant` 与 `types2.ts` 是另一套状态模型，需要收敛。
 5. 新品事实卡审核流（总部上传资料 → 抽取进待审核 → 人工确认 → 才可用于推文）尚未实现。
