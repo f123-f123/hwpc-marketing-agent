@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { IdSchema, IsoDateTimeSchema } from "./common.js";
 
-export const FindingKindSchema = z.enum(["fact", "image", "compliance", "conflict"]);
+export const FindingKindSchema = z.enum(["fact", "image", "compliance", "conflict", "style"]);
 export type FindingKind = z.infer<typeof FindingKindSchema>;
 
 export const FindingSeveritySchema = z.enum(["blocker", "major", "minor"]);

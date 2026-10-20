@@ -18,6 +18,7 @@ export interface ServerConfig {
   localKbDir?: string;
   ima: { clientId?: string; apiKey?: string; kbName: string };
   model: { baseUrl?: string; apiKey?: string; name?: string; timeoutMs: number };
+  auth: { secret?: string; hqInitialPassword: string; storeInitialPassword: string; secureCookie: boolean };
 }
 
 export function loadConfig(): ServerConfig {
@@ -38,6 +39,12 @@ export function loadConfig(): ServerConfig {
       apiKey: opt("MODEL_API_KEY"),
       name: opt("MODEL_NAME"),
       timeoutMs: Number(opt("MODEL_TIMEOUT_MS") ?? 60000),
+    },
+    auth: {
+      secret: opt("AUTH_SECRET"),
+      hqInitialPassword: opt("HQ_INITIAL_PASSWORD") ?? "hq123456",
+      storeInitialPassword: opt("STORE_INITIAL_PASSWORD") ?? "store123456",
+      secureCookie: opt("COOKIE_SECURE") === "true",
     },
   };
 }

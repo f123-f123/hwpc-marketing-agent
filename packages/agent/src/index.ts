@@ -26,3 +26,13 @@ export { evaluateGate } from "./gate.js";
 
 /** 占位：目前返回模拟工作流（事件均 simulated=true）。即将替换为适配 Consultant 的实现。 */
 export const createWorkflow: CreateWorkflow = (deps) => createMockWorkflow(deps);
+
+// 门店推文
+export { generatePostVariants, parseModelJson, templateRaw } from "./content/engine.js";
+export type { PostEngineInput, GeneratedVariant } from "./content/engine.js";
+export { pickAngles, ANGLES } from "./content/angles.js";
+export { excerptGuide, PLATFORM_CRAFT } from "./content/prompt.js";
+export { articleText, findCliches, similarity, SIMILARITY_LIMIT } from "./content/style.js";
+export { verifyAndRepair, scopeFromState } from "./verify.js";
+export type { VerifyScope } from "./verify.js";
+export { topicsIn } from "./lexicon.js";

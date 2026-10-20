@@ -53,28 +53,51 @@ export interface Issue {
   fix?: { type: "remove_sentence"; sentence: string } | { type: "append_qualifier"; text: string } | { type: "use_verbatim" } | { type: "drop_block" } | { type: "set_caption" };
 }
 
+/**
+ * 核验范围：哪些型号/配置可以出现、要避开哪些话题、能否出现价格、哪些型号不能提。
+ * 选购对话从 ConversationState 推出；门店推文由推广任务直接给出。
+ */
+export interface VerifyScope {
+  productIds: string[];
+  configurationIds: string[];
+  avoidTopics: string[];
+  noPrice: boolean;
+  /** 不得出现的其他型号名（如被排除的候选）。 */
+  otherModels: string[];
+}
+
+export function scopeFromState(state: ConversationState): VerifyScope {
+  const scope = scopeOf(state);
+  const avoid = topicsOf(state.items["mustAvoid"]?.value);
+  const productIds = scope.refs.map((r) => r.productId);
+  return {
+    productIds,
+    configurationIds: scope.configurationIds,
+    avoidTopics: avoid,
+    noPrice: avoid.includes("price") || Boolean(state.items["activity"] && /不涉及活动/.test(state.items["activity"].value)),
+    otherModels: state.candidates.filter((c) => !productIds.includes(c.productId)).map((c) => c.model),
+  };
+}
+
 interface Ctx {
-  state: ConversationState;
   pack: MaterialPack;
   facts: Map<string, FactRecord>;
   scopeProducts: string[];
   scopeConfigs: string[];
   avoidTopics: string[];
   noPrice: boolean;
+  otherModels: string[];
 }
 
-function ctxOf(state: ConversationState, pack: MaterialPack): Ctx {
-  const scope = scopeOf(state);
-  const avoid = topicsOf(state.items["mustAvoid"]?.value);
-  const noPrice = avoid.includes("price") || Boolean(state.items["activity"] && /不涉及活动/.test(state.items["activity"].value));
+function ctxOf(scope: VerifyScope, pack: MaterialPack): Ctx {
   return {
-    state,
     pack,
     facts: new Map(pack.facts.map((f) => [f.factId, f])),
-    scopeProducts: scope.refs.map((r) => r.productId),
+    scopeProducts: scope.productIds,
     scopeConfigs: scope.configurationIds,
-    avoidTopics: avoid,
-    noPrice,
+    avoidTopics: scope.avoidTopics,
+    noPrice: scope.noPrice,
+    otherModels: scope.otherModels,
   };
 }
 
@@ -99,11 +122,19 @@ export function checkText(ctx: Ctx, text: string, factIds: string[], where: { bl
     }
   }
 
+  // 所选型号的名称本身带数字（如“MateBook 14”），检查数值前先把型号名去掉，避免把型号当成无依据的参数。
+  const modelNames = ctx.pack.products
+    .filter((p) => ctx.scopeProducts.includes(p.productId))
+    .flatMap((p) => [p.model, p.family, ...p.aliases, p.model.replace(/^HUAWEI\s+/i, ""), p.model.replace(/[（(][^）)]*[）)]/g, "").replace(/^HUAWEI\s+/i, "").trim()])
+    .filter((n) => /\d/.test(n))
+    .sort((a, b) => b.length - a.length);
+  const withoutModels = (s: string) => modelNames.reduce((acc, n) => acc.split(n).join(" "), s);
+
   const sents = sentences(text);
   for (const sen of sents) {
     const sn = norm(sen);
-    // 数值：每个数字必须出现在绑定事实中
-    const nums = [...sen.matchAll(NUM_RE)].map((m) => m[0]);
+    // 数值：每个数字必须出现在绑定事实中（型号名里的数字除外）
+    const nums = [...withoutModels(sen).matchAll(NUM_RE)].map((m) => m[0]);
     const unsupported = nums.filter((n) => !supportAll.includes(norm(n)));
     if (unsupported.length) {
       push({
@@ -172,7 +203,7 @@ export function checkText(ctx: Ctx, text: string, factIds: string[], where: { bl
   // 型号：文中出现的型号必须是所选型号
   const models = ctx.pack.products.filter((p) => ctx.scopeProducts.includes(p.productId));
   const known = models.flatMap((p) => [p.model, p.family, ...p.aliases].map(norm));
-  const rejected = ctx.state.candidates.filter((c) => !ctx.scopeProducts.includes(c.productId)).map((c) => norm(c.model));
+  const rejected = ctx.otherModels.map(norm);
   const tn = norm(text);
   for (const r of rejected) {
     if (r && tn.includes(r) && !known.some((k) => k.includes(r) || r.includes(k) && r.length === k.length)) {
@@ -230,7 +261,9 @@ function checkImage(ctx: Ctx, b: Extract<ArticleBlock, { type: "image" }>, idx: 
 }
 
 export interface VerifyInput {
-  state: ConversationState;
+  /** 二选一：选购对话传 state，门店推文传 scope。 */
+  state?: ConversationState;
+  scope?: VerifyScope;
   pack: MaterialPack;
   article: Article;
   plan?: InteractionPlan;
@@ -239,7 +272,9 @@ export interface VerifyInput {
 }
 
 export function collectIssues(inp: VerifyInput): Issue[] {
-  const ctx = ctxOf(inp.state, inp.pack);
+  const scope = inp.scope ?? (inp.state ? scopeFromState(inp.state) : undefined);
+  if (!scope) throw new Error("verify 需要 state 或 scope");
+  const ctx = ctxOf(scope, inp.pack);
   const issues: Issue[] = [];
   const a = inp.article;
   // 标题、导语、行动引导

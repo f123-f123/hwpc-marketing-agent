@@ -27,6 +27,9 @@ import { renderRecoveryHtml } from "./recoveryHtml.js";
 import { TaskError, type TaskManager } from "./tasks.js";
 import { SessionError } from "./errors.js";
 import { StorageError } from "./store.js";
+import { AuthError } from "./marketing/auth.js";
+import { registerMarketingRoutes, type MarketingModule } from "./marketing/routes.js";
+import { MarketingError } from "./marketing/service.js";
 import type { SessionManager } from "./sessions.js";
 
 export interface AppDeps {
@@ -34,6 +37,8 @@ export interface AppDeps {
   model: ModelService;
   tasks: TaskManager;
   sessions?: SessionManager;
+  /** 门店推文模块（登录、任务、稿件、发布）。 */
+  marketing?: MarketingModule;
   dataMode?: "auto" | "mock" | "local" | "ima";
   corsOrigin: string;
   /** 配置的资料模式，用于计算 activeDataOrigin。 */
@@ -62,6 +67,9 @@ export function createApp(deps: AppDeps) {
     if (err instanceof SessionError) return fail(c, err.code, err.message, err.details);
     if (err instanceof DataServiceError) return fail(c, "data_unavailable", err.message, { code: err.code, origin: err.origin });
     if (err instanceof ModelServiceError) return fail(c, "model_unavailable", err.message, { code: err.code });
+    if (err instanceof AuthError) return fail(c, err.code, err.message);
+    if (err instanceof MarketingError) return fail(c, err.code, err.message);
+    if (err instanceof z.ZodError) return fail(c, "validation_error", "请求不合法", err.issues);
     if (err instanceof StorageError) return err.kind === "invalid_id" ? fail(c, "not_found", err.message) : fail(c, "storage_error", err.message);
     if (err instanceof SyntaxError) return fail(c, "validation_error", "请求体不是合法 JSON");
     console.error("[server] 未处理异常:", err instanceof Error ? err.message : err);
@@ -188,6 +196,8 @@ export function createApp(deps: AppDeps) {
       headers: { "content-type": content.mimeType, "cache-control": "private, max-age=300", "x-content-type-options": "nosniff" },
     });
   });
+
+  if (deps.marketing) registerMarketingRoutes(app, deps.marketing, body);
 
   app.notFound((c) => fail(c, "not_found", "接口不存在"));
   return app;

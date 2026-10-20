@@ -37,6 +37,68 @@ $env:DATA_SOURCE_MODE='mock'; npm run dev:server   # 显式 MOCK 演示（引擎
 
 旧营销接口 `/api/tasks/*` 仍在，但面试/演示的主链路是上表。
 
+## 门店推文模块（`src/marketing/`）
+
+总部下发推广任务 → 门店导购按平台生成 3 个版本 → 核验 → 选定 → 发布 / 辅助发布 → 总部看进度。
+
+| 文件 | 职责 |
+| --- | --- |
+| `security.ts` | 口令散列（scrypt）、登录令牌（HMAC 签名）、平台密钥加密（AES-256-GCM） |
+| `repo.ts` | 文件存储（`.runtime/marketing/`，一条记录一个 JSON，原子改名） |
+| `auth.ts` | 登录、改口令、总部创建门店账号；首次启动创建初始账号 |
+| `settings.ts` | 系统设置：写作模型、公众号接口地址、小红书发布接口（界面设置优先于环境变量） |
+| `service.ts` | 用例与门控：生成前检查任务与门店资料，发布前检查选稿与核验状态 |
+| `publishers.ts` | 公众号接口、小红书接口 / 辅助发布、朋友圈辅助发布 |
+| `routes.ts` | HTTP 路由（`/api/auth/*`、`/api/marketing/*`），每个路由声明所需角色 |
+
+写作本身在 `packages/agent/src/content/`：切入角度轮换、事实占位符、模板稿回退、套话与跨门店查重。
+
+### 登录与账号
+
+- 首次启动且没有任何账号时，创建 `hq`（总部）和 `store001`（示例门店），口令取 `.env` 的 `HQ_INITIAL_PASSWORD` / `STORE_INITIAL_PASSWORD`（默认 `hq123456` / `store123456`）。**登录后立即修改。**
+- 令牌放在 HttpOnly Cookie（`hwpc_token`，SameSite=Lax，7 天），也接受 `Authorization: Bearer`。改口令后旧令牌全部失效。
+- 主密钥 `AUTH_SECRET` 同时用于签名令牌和加密平台密钥。未设置时生成 `.runtime/marketing/master.key`；**丢失主密钥 = 已保存的 AppSecret 等全部无法解密**，公网部署请显式设置并备份。
+- 后续要接企业统一登录（如企业微信 / 华为账号 OAuth）时，替换 `AuthService.login` 并保持 `authenticate` 的返回即可。
+
+### 写作模型
+
+总部「设置 → 系统设置」填写 OpenAI 兼容接口的地址、模型名、API Key 与写作温度，保存即生效；也可以用环境变量 `MODEL_BASE_URL / MODEL_API_KEY / MODEL_NAME`。都没有时生成**模板稿**并在界面标注。模型调用失败时同样回退模板稿，核验报告写明失败原因。
+
+### 微信公众号
+
+门店在「设置 → 平台账号」填写 AppID / AppSecret，并在公众号后台把服务器出口 IP 加入白名单。发布流程：`/cgi-bin/stable_token` → `/cgi-bin/media/uploadimg`（正文图）→ `/cgi-bin/material/add_material`（封面）→ `/cgi-bin/draft/add`；发布方式选“直接发布”时再调用 `/cgi-bin/freepublish/submit`。
+
+> ⚠ 以上调用已用模拟接口测试（`test/marketing.test.ts`），**尚未用真实公众号联调**。各接口权限以公众号类型与认证状态为准；正文图需小于 1 MB 的 jpg/png。
+
+### 小红书发布接口约定
+
+小红书没有面向普通账号的公开发帖接口，默认走**辅助发布**：复制标题 / 正文、保存图片、打开小红书 App 或创作中心网页，导购发布后回填链接。
+
+若你方有发布通道（自建中转、服务商或开放平台网关），在系统设置填写「发布接口地址」与「系统密钥」，门店把小红书发布方式改为“接口发布”。本服务会这样调用：
+
+```http
+POST <发布接口地址>
+Content-Type: application/json
+Authorization: Bearer <系统密钥>          # 系统设置里填写时才带
+X-Store-Token: <门店访问令牌>             # 门店绑定里填写时才带
+
+{
+  "storeId": "store001",
+  "accountId": "门店在发布接口侧的账号标识",
+  "postId": "稿件编号",
+  "title": "不超过 20 字的标题",
+  "content": "正文（含行动引导与 #话题）",
+  "tags": ["话题1", "话题2"],
+  "images": [{ "imageId": "…", "mimeType": "image/jpeg", "caption": "…", "base64": "…" }]
+}
+```
+
+期望响应：`{ "ok": true, "id": "笔记编号（可选）", "url": "笔记链接（可选）", "message": "说明（可选）" }`。返回 `url` 时记为已发布，否则记为已提交；HTTP 非 2xx 或 `ok:false` 记为失败，并把 `message` 展示给导购。
+
+### 朋友圈与海报
+
+个人微信没有发布接口：朋友圈只做辅助发布（复制文案、保存图片、打开微信）。海报在浏览器端用 canvas 生成 1080×1440 PNG 直接下载。如果门店使用企业微信，后续可以接“客户朋友圈发表任务”接口，实现总部一键下发、导购一键发表。
+
 ## 持久化与能力
 
 - `FileSessionStore`：每个会话一个 JSON，临时文件 + 原子改名；启动后从 `.local-sessions/` 恢复需求版本、确认、方案、场景进度、反馈。
@@ -48,7 +110,8 @@ $env:DATA_SOURCE_MODE='mock'; npm run dev:server   # 显式 MOCK 演示（引擎
 - 顾问引擎目前是 `fixtures` 的模拟引擎（`components.engine.isMock=true`），不是真实模型判断。
 - 真实资料模式下，多设备场景需要 A 提供成对设备的证据；缺少证据时方案会跳过该场景并写明原因，这是预期行为。
 - 只读恢复 HTML 是"方案快照"，不是可交互离线体验包（场景运行时尚未接入导出）。
-- 仅绑定回环地址、无鉴权，只用于本地演示。
+- 推文模块有登录鉴权；选购顾问接口（`/api/sessions`）仍无鉴权，所以服务只绑定回环地址。公网部署前需补齐访问控制、限流与 HTTPS（并设置 `COOKIE_SECURE=true`）。
+- 资料层的表格解析存在列错位与表头残留（例如把厚度解析成长度、把“CPU”“继续访问”当成参数值）。推文侧已加过滤与尺寸合理性检查作为防线，但根本修复应在 `packages/data` 的解析器。
 
 ## 测试
 
@@ -59,3 +122,5 @@ npx vitest run apps/server/test
 - `sessions.test.ts`：确认门控、场景动作、反馈后旧方案过期、重开恢复
 - `sessionRoutes.test.ts`：HTTP 纵向链路（目录 → 会话 → 方案 → 体验 → 反馈 → 导出）
 - `api.test.ts`：旧营销接口
+- `sessionConsistency.test.ts`：并发写入不丢更新、旧方案实例作废、确认版本与恢复门控
+- `marketing.test.ts`：登录与权限、生成门控、选稿 → 辅助发布 → 回填 → 看板、公众号接口调用顺序与密钥加密、核验未通过不可发布、门店隔离

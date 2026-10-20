@@ -9,7 +9,7 @@ import {
 } from "@hwpc/contracts";
 
 /** 只依赖 safeParse 的最小形状，web 包不需要直接依赖 zod。 */
-interface Schema<T> {
+export interface Schema<T> {
   safeParse(data: unknown): { success: true; data: T } | { success: false };
 }
 
@@ -46,12 +46,18 @@ function toApiError(response: Response, body: unknown): ApiError {
   return new ApiError(err?.message ?? fallback, response.status, err?.code, latest.success ? latest.data : undefined);
 }
 
-async function call<T>(path: string, schema: Schema<T>, body?: unknown): Promise<T> {
+/**
+ * 调用后端并按契约校验响应。传 body 时默认 POST；需要其他方法时传 method。
+ * 登录状态放在 HttpOnly Cookie 里，同源请求会自动带上。
+ */
+export async function call<T>(path: string, schema: Schema<T>, body?: unknown, method?: "POST" | "PUT" | "PATCH" | "DELETE"): Promise<T> {
   let response: Response;
   try {
     response = await fetch(
       path,
-      body === undefined ? undefined : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+      body === undefined && !method
+        ? undefined
+        : { method: method ?? "POST", ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) },
     );
   } catch {
     throw new ApiError(NETWORK_MESSAGE, 0);

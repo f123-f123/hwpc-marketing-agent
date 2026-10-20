@@ -58,6 +58,9 @@ export const ApiErrorCodeSchema = z.enum([
   "scene_unavailable", // 409 场景版本不存在、已失效、完整性异常或配置不合法
   "storage_error", // 500 持久化读写失败
   "internal_error", // 500
+  "unauthorized", // 401 未登录或登录已失效
+  "forbidden", // 403 已登录但无权限
+  "conflict", // 409 资源已存在
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 
@@ -83,6 +86,9 @@ export const API_ERROR_HTTP_STATUS: Record<ApiErrorCode, number> = {
   scene_unavailable: 409,
   storage_error: 500,
   internal_error: 500,
+  unauthorized: 401,
+  forbidden: 403,
+  conflict: 409,
 };
 
 /* ---- GET /api/health ---- */

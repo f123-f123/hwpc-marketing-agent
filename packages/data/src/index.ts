@@ -84,3 +84,5 @@ export function createDataService(config: DataServiceConfig): DataService {
 export function createDeviceKnowledgeService(data: DataService): DeviceKnowledgeService {
   return createKnowledgeService(data);
 }
+
+export { readPlatformGuide } from "./guides.js";
