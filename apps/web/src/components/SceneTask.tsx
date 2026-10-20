@@ -37,7 +37,7 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
   return (
     <article className="scene" aria-labelledby="scene-title">
       <header className="scene-head">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="back" />返回空间</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="back" />返回</button>
         <div className="row">
           <Badge tone={instance.mode === "personal" ? "primary" : "neutral"}>{instance.mode === "personal" ? `个人方案 v${instance.planVersion}` : "通用说明"}</Badge>
           <Badge tone={experience.completion === "walkthrough_completed" ? "success" : "neutral"}>{COMPLETION_LABEL[experience.completion]}</Badge>

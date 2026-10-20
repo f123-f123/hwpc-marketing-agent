@@ -1,13 +1,15 @@
 /**
  * apps/web —— 华为 PC 门店助手。两个模块：
- * - 选购顾问（#/advisor，默认）：面向到店顾客，无需登录。左侧对话，右侧 需求 → 候选 → 体验 → 方案。
+ * - 选购顾问（#/advisor，默认）：面向到店顾客，无需登录。先在“需求沟通”里聊清楚并确认，
+ *   再进入全屏体验页（候选、三维空间与场景、方案），页面里可以侧边提问。
  * - 推文（#/posts、#/hq）：门店导购按总部任务生成、挑选、发布推文；总部下发任务、看进度、做系统设置。需要登录。
  * 界面状态全部以后端返回为准，前端不推演业务状态。
  */
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { SessionSnapshot, User } from "@hwpc/contracts";
 import { Home } from "./components/Home";
-import { Workspace } from "./components/Workspace";
+import { Consult } from "./components/Consult";
+import { ImmersivePage } from "./components/page/ImmersivePage";
 import { CampaignWorkbench } from "./components/marketing/CampaignWorkbench";
 import { HqCampaigns, HqProgress } from "./components/marketing/HqCampaigns";
 import { HqSettings } from "./components/marketing/HqSettings";
@@ -57,17 +59,29 @@ function SourceLine({ snap }: { snap: SessionSnapshot }) {
   );
 }
 
-/** 选购顾问：原有的对话工作台。 */
+/** 选购顾问：需求沟通 → 全屏体验页。有体验页时默认进入体验页，可以随时回到需求沟通。 */
 function Advisor({ auth }: { auth: Auth }) {
   const { snap, loading, busy, notice, actions } = useSession();
   const backend = useBackendStatus();
+  const [mode, setMode] = useState<"consult" | "page">("page");
+  useEffect(() => {
+    if (!snap) setMode("page");
+  }, [snap]);
+  const goto = (next: "consult" | "page") => {
+    setMode(next);
+    window.scrollTo({ top: 0 });
+  };
+
+  if (snap?.page && mode === "page") {
+    return <ImmersivePage key={snap.page.pageId} snap={snap} page={snap.page} busy={busy} notice={notice} actions={actions} onConsult={() => goto("consult")} />;
+  }
   return (
     <>
       <Topbar section="advisor" user={auth.user} onLogout={() => void auth.logout()}>
         {snap && <SourceLine snap={snap} />}
         {snap && (
-          <button type="button" className="btn btn-sm" onClick={actions.reset}>
-            <Icon name="plus" />新咨询
+          <button type="button" className="btn btn-sm" onClick={actions.reset} aria-label="新咨询">
+            <Icon name="plus" /><span className="btn-label">新咨询</span>
           </button>
         )}
       </Topbar>
@@ -87,7 +101,7 @@ function Advisor({ auth }: { auth: Auth }) {
           <div className="skeleton skeleton-line" />
         </div>
       ) : snap ? (
-        <Workspace key={snap.sessionId} snap={snap} busy={busy} actions={actions} />
+        <Consult key={snap.sessionId} snap={snap} busy={busy} actions={actions} onPage={() => goto("page")} />
       ) : (
         <Home busy={busy} status={backend.status} statusError={backend.error} onRetryStatus={() => void backend.reload()} onCreate={actions.create} />
       )}

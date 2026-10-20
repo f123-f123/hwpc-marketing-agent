@@ -52,7 +52,8 @@ apps/server
   src/marketing/     推文模块：security（scrypt/HMAC/AES-GCM）、repo（JSON 文件存储）、auth、settings、service（门控）、publishers、routes
 apps/web/src
   App.tsx            hash 路由：#/advisor（默认，免登录）、#/posts、#/hq、#/settings
-  components/        选购顾问：Home / Workspace / ChatPanel / NeedsPanel / CandidatesPanel / ExperiencePanel / SceneTask / PlanPanel
+  components/        选购顾问：Home → Consult（需求沟通：ChatPanel + 需求要点）→ page/ImmersivePage（全屏体验页）；SceneTask 以 SceneOverlay 浮层打开
+  components/page/   体验页：sections（开场/日常/候选/体验/方案）、SlotImage（图片位与占位）、QaDrawer（侧边提问）、useImmersive（滚动淡入、进度条）
   components/marketing/  推文：Login / StoreHome / CampaignWorkbench / PostPanel / Previews（含海报 PNG）/ AssistSheet / VerifyReport / ArticleEditor / StoreSettings / HqCampaigns / HqSettings
   scenes/            场景体验渲染层：Room3D（three.js 三维空间，按需加载）+ room/（布置、贴图、渲染器）
                      flows/（每个场景的操作流程，纯函数，有测试）+ stages/（虚拟设备舞台：FileTransfer / MultiScreen / Generic）
@@ -68,6 +69,12 @@ fixtures             MOCK 数据与模拟顾问引擎
 - 引擎：模型只写 `{{F3}}` 占位符，程序按原文填事实并带限制条件；自编数字 / 价格 / 绝对化被核验删除；按门店轮换 9 种角度；套话检测；与其他门店已选稿查重；模型未配置或失败时回退模板稿并标注。
 - 发布：公众号走官方接口（stable_token → 上传图片 → draft/add → 可选 freepublish/submit，**未真实联调**）；小红书默认辅助发布（复制 / 存图 / 打开 App 或创作中心），可切换为调用用户自建发布接口（协议见 `apps/server/README.md`「小红书发布接口约定」）；朋友圈辅助发布；海报浏览器生成 1080×1440 PNG。
 - 程序门控：生成前检查任务进行中、平台属于任务、门店资料齐全；发布前必须选稿且核验非 blocked；门店只能访问自己的稿件。
+
+### 选购顾问：需求沟通 → 全屏体验页（2026-10-20 按用户设想重做）
+- 流程：先在“需求沟通”里把需求聊清楚并确认 → 点“生成我的体验页”（组装方案时一起生成）→ 进入全屏沉浸页，对话折叠；页面里可以侧边提问。
+- 两个智能体：顾问引擎（`AdvisorEngine`）负责需求沟通与生成方案/页面；答疑引擎（`QaEngine`，`packages/contracts/src/qa.ts`）只回答页面里的提问，没有写入口，页面不会因提问改变；问题涉及改需求时只提示回到需求沟通。两者目前都是 fixtures 里的关键词规则模拟。
+- 页面是“版块 + 内容位”的结构（`packages/contracts/src/page.ts`，服务端 `apps/server/src/page/`），不是模型写的 HTML。图片位、文案位由填充器补齐（接口见 `apps/server/README.md`「体验页内容填充」）；**用户说图片来源（官网 / 本地知识库）以后自己配置，目前没有接任何图源**，图片位显示占位。文案先用知识库事实模板句。
+- 视觉：深色开场（大标题 + 暖光）+ 浅色正文；候选左图固定、右文滚动；滚动淡入；右侧进度条；三维空间和场景任务嵌在“动手体验”版块，场景以浮层打开、关掉回到原位。原来的 需求/候选/体验/方案 分页已并入体验页并删除。
 
 ### 选购顾问（第一阶段，已提交）
 对话工作台、需求确认门、候选取舍、全景 + 场景任务、个人方案、导出只读快照均可运行；顾问引擎仍是 `fixtures` 的**关键词规则模拟**。
@@ -90,7 +97,9 @@ fixtures             MOCK 数据与模拟顾问引擎
 5. 新品事实卡审核流（总部上传资料 → 抽取进待审核 → 人工确认 → 才可用于推文）尚未实现。
 6. 离店个人互动 HTML：目前只有只读快照；旧的离线运行时在第一次重构中作为死代码删除，可从提交 `37d2880` 找回。
 7. 企业微信“客户朋友圈发表任务”接口可实现总部一键下发、导购一键发表，尚未接入。
-8. 小问题：登出瞬间有在途请求会在控制台出现 401；未使用的图片 `hero-device.png`、`scene-multidevice.png`、`huawei-collaboration.png`、`huawei-continuity.png` 保留未删。
+8. 小问题：登出瞬间有在途请求会在控制台出现 401；未使用的图片 `hero-device.png`、`scene-multidevice.png` 保留未删（来源未记录，不要使用）。
+9. 体验页后续：接图片填充器（本地知识库 `图片索引.csv` → 官网 → 检索 API）、接真实答疑模型、模型润色文案（仍只用 `{{F}}` 占位符填事实）、把体验页导出为离线单文件 HTML（离店可用、可分享）。
+10. **用户要求：推文模板（小红书 / 公众号 / 朋友圈 / 海报）太简陋，需要优化**——尚未开始。
 
 ## 五、运行与验证
 
@@ -109,6 +118,7 @@ npm run build
 ## 六、工作约定
 
 - 改动先在分支上做；提交、推送前征得用户同意。
+- 视觉语言（2026-10-20 按用户要求，参照提交 `37d2880`）：白底、内容直接写在页面上，少用框——分组靠留白、标题和细线，提示用左侧色线；场景图用 `Blend` 组件淡入页面并注明“华为商城素材 · 仅作场景氛围”。只有浮层、输入区、平台预览和示意画面保留底色。
 - 所有视觉值来自 `styles/tokens.css`；中文正文 ≥ 14px、最小 12px，不用负字距，图标用 `components/ui.tsx` 的 SVG。
 - 门控写在服务端程序里，不靠提示词；模拟内容必须标注；事实只能来自知识库原文。
 - 修 bug 先写能复现的测试，确认修复前失败、修复后通过。

@@ -31,6 +31,7 @@ export const createWorkflow: CreateWorkflow = (deps) => createMockWorkflow(deps)
 export { generatePostVariants, parseModelJson, templateRaw } from "./content/engine.js";
 export type { PostEngineInput, GeneratedVariant } from "./content/engine.js";
 export { pickAngles, ANGLES } from "./content/angles.js";
+export { selectFacts } from "./content/facts.js";
 export { excerptGuide, PLATFORM_CRAFT } from "./content/prompt.js";
 export { articleText, findCliches, similarity, SIMILARITY_LIMIT } from "./content/style.js";
 export { verifyAndRepair, scopeFromState } from "./verify.js";

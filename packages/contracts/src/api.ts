@@ -41,6 +41,8 @@ export const API_PATHS = {
   sessionMigrate: (id: string) => `/api/sessions/${encodeURIComponent(id)}/scene-migrations`,
   sessionExport: (id: string) => `/api/sessions/${encodeURIComponent(id)}/export`, // ?format=&planVersion=
   sessionResume: (id: string) => `/api/sessions/${encodeURIComponent(id)}/resume`,
+  /** 体验页侧边提问（答疑智能体）。 */
+  sessionQa: (id: string) => `/api/sessions/${encodeURIComponent(id)}/qa`,
   recoveryVerify: "/api/recovery/verify",
 } as const;
 

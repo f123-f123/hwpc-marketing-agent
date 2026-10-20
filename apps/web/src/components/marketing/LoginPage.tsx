@@ -41,6 +41,10 @@ export function LoginPage({ auth }: { auth: Auth }) {
         </button>
         <p className="muted small">首次部署的初始账号见服务端启动日志；登录后请在“设置”里修改口令。</p>
       </form>
+      <figure className="login-visual" aria-hidden="true">
+        <img src="/media/huawei-collaboration.png" alt="" />
+        <figcaption>华为商城素材 · 仅作场景氛围，不代表具体型号</figcaption>
+      </figure>
     </main>
   );
 }

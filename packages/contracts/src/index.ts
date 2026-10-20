@@ -21,6 +21,8 @@ export * from "./plan.js";
 export * from "./capabilities.js";
 export * from "./advisor.js";
 export * from "./needsLogic.js";
+export * from "./page.js";
+export * from "./qa.js";
 export * from "./session.js";
 export * from "./recovery.js";
 export * from "./api.js";

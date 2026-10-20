@@ -100,5 +100,7 @@ export const api = {
     snapshot(API_PATHS.sessionAction(s.sessionId, instanceId), { actionId, baseRevision: s.revision }),
   feedback: (s: SessionSnapshot, input: FeedbackInput) => snapshot(API_PATHS.sessionFeedback(s.sessionId), { ...input, baseRevision: s.revision }),
   resume: (s: SessionSnapshot) => snapshot(`${API_PATHS.session(s.sessionId)}/resume`, { baseRevision: s.revision }),
+  /** 体验页侧边提问：只记录问答，不改变需求、方案和页面。 */
+  ask: (s: SessionSnapshot, question: string) => snapshot(API_PATHS.sessionQa(s.sessionId), { question, baseRevision: s.revision }),
   exportUrl: (s: SessionSnapshot) => `${API_PATHS.sessionExport(s.sessionId)}?format=recovery_html`,
 };

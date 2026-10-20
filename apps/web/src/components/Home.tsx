@@ -32,7 +32,7 @@ export function Home({ busy, status, statusError, onRetryStatus, onCreate }: {
   const modelReal = status ? status.model.state === "connected" && status.model.provider !== "mock" : false;
 
   return (
-    <main className="home">
+    <main className="home atmo">
       <section className="home-main" aria-labelledby="home-title">
         <p className="home-eyebrow">华为 PC · 门店选购顾问</p>
         <h1 id="home-title" className="home-title">先说说，你想用电脑做什么</h1>

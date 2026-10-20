@@ -72,16 +72,3 @@ export function EmptyState({ title, children, action }: { title: string; childre
     </div>
   );
 }
-
-/** 面板标题：标题 + 可选副标题 + 右侧补充信息。id 供 section 的 aria-labelledby 引用。 */
-export function PanelHead({ id, title, description, aside }: { id: string; title: string; description?: string; aside?: ReactNode }) {
-  return (
-    <header className="panel-head">
-      <div>
-        <h2 id={id} className="panel-title">{title}</h2>
-        {description && <p className="panel-desc">{description}</p>}
-      </div>
-      {aside && <div className="panel-aside">{aside}</div>}
-    </header>
-  );
-}

@@ -5,7 +5,10 @@
  */
 :root {
   /* 颜色：1 个品牌色 + 中性灰阶 + 3 个语义色（只表达状态，不做装饰） */
-  --color-bg: #f4f5f7;
+  /* 页面是一张白纸：分区靠留白和细线，不靠卡片 */
+  --color-bg: #ffffff;
+  --color-band: #f6f7f9;
+  --color-glass: rgb(255 255 255 / 88%);
   --color-surface: #ffffff;
   --color-surface-muted: #f0f1f4;
   --color-surface-sunken: #e9ebef;
@@ -70,9 +73,39 @@
   --content-max: 1200px;
   --topbar-h: 56px;
   --chat-w: minmax(360px, 440px);
+  --section-gap: clamp(40px, 5vw, 64px);
   --font-ui: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 
   --duration-fast: 0.15s;
+
+  /*
+   * 氛围背景：大块柔光 + 极淡颗粒，让白底有温度。只用在背景层，不承载信息，文字始终压在接近白的底上。
+   */
+  --atmo-warm: rgb(255 196 156 / 72%);
+  --atmo-rose: rgb(255 170 186 / 50%);
+  --atmo-cool: rgb(164 196 255 / 62%);
+  --atmo-mint: rgb(168 226 204 / 52%);
+  --atmo-glass: rgb(255 255 255 / 62%);
+  --atmo-glass-strong: rgb(255 255 255 / 82%);
+  --atmo-glass-line: rgb(255 255 255 / 70%);
+  --atmo-glass-shadow: 0 8px 30px rgb(20 24 31 / 7%);
+  --atmo-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* 沉浸式体验页（page.css）：深色开场 + 浅色正文 */
+  --ip-dark: #0a0b0d;
+  --ip-dark-fg: #f5f6f8;
+  --ip-dark-muted: rgb(245 246 248 / 62%);
+  --ip-dark-line: rgb(245 246 248 / 22%);
+  --ip-glow-core: rgb(255 236 210 / 92%);
+  --ip-glow-mid: rgb(255 170 120 / 42%);
+  --ip-glow-edge: rgb(199 0 11 / 22%);
+  --ip-ph-light: radial-gradient(120% 90% at 30% 25%, #ffffff 0%, #f3f4f6 48%, #e6e8ec 100%);
+  --ip-ph-ink: rgb(27 29 33 / 8%);
+  --text-hero: clamp(40px, 6vw, 88px);
+  --text-section-title: clamp(30px, 3.4vw, 52px);
+  --text-figure: clamp(30px, 3.4vw, 52px);
+  --ip-section-pad: clamp(72px, 10vw, 140px);
+  --ip-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   /*
    * 场景模拟：只用于 scenes.css 里的虚拟设备与桌面。

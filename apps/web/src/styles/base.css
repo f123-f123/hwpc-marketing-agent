@@ -1,4 +1,7 @@
-/* 重置与基础组件：按钮、表单、标签、提示条、卡片。只引用 tokens.css 的变量。 */
+/*
+ * 重置与基础组件：按钮、表单、标签、提示条、卡片。只引用 tokens.css 的变量。
+ * 视觉原则：内容直接写在页面上，少用框。分组靠留白、标题和细线；只有浮层、输入区和示意画面才有底色。
+ */
 *,
 *::before,
 *::after { box-sizing: border-box; }
@@ -33,20 +36,20 @@ a { color: var(--color-primary); }
 /* ---------- 按钮 ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  min-height: 36px; padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
-  background: var(--color-surface); color: var(--color-fg);
+  min-height: 38px; padding: 0 var(--space-5);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  background: transparent; color: var(--color-fg);
   font-size: var(--text-md); font-weight: var(--weight-normal); line-height: 1;
   text-decoration: none; white-space: nowrap; cursor: pointer;
   transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
 .btn:hover:not(:disabled) { background: var(--color-surface-muted); }
-.btn:disabled { cursor: not-allowed; color: var(--color-muted-fg); background: var(--color-surface-muted); border-color: var(--color-border); }
+.btn:disabled { cursor: not-allowed; color: var(--color-muted-fg); background: var(--color-surface-muted); border-color: transparent; }
 .btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-primary-fg); font-weight: var(--weight-strong); }
 .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn-ghost:hover:not(:disabled) { background: var(--color-surface-muted); }
-.btn-sm { min-height: 30px; padding: 0 var(--space-3); font-size: var(--text-sm); }
+.btn-sm { min-height: 32px; padding: 0 var(--space-4); font-size: var(--text-sm); }
 .btn-lg { min-height: 44px; padding: 0 var(--space-6); font-size: var(--text-lg); }
 
 .link {
@@ -58,8 +61,8 @@ a { color: var(--color-primary); }
 /* ---------- 表单 ---------- */
 .input, .textarea {
   width: 100%; padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: transparent;
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 .input:focus, .textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: var(--focus-ring); }
@@ -68,7 +71,7 @@ a { color: var(--color-primary); }
 .chip {
   display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3);
   border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
-  background: var(--color-surface); font-size: var(--text-sm); cursor: pointer;
+  background: transparent; font-size: var(--text-sm); cursor: pointer;
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 .chip:hover:not(:disabled) { border-color: var(--color-fg-secondary); }
@@ -87,31 +90,27 @@ a { color: var(--color-primary); }
 .badge-warning { background: var(--color-warning-weak); color: var(--color-warning); }
 .badge-danger { background: var(--color-danger-weak); color: var(--color-danger); }
 
-/* ---------- 提示条 ---------- */
+/* ---------- 提示条：不是框，是一行带左侧色线的说明 ---------- */
 .alert {
   display: flex; align-items: flex-start; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border); border-radius: var(--radius-md);
-  background: var(--color-surface-muted); color: var(--color-fg-secondary);
-  font-size: var(--text-sm);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-fg-secondary); font-size: var(--text-sm);
 }
 .alert > :first-child { flex: 1; min-width: 0; }
-.alert-warning { background: var(--color-warning-weak); border-color: var(--color-warning-line); color: var(--color-warning); }
-.alert-danger { background: var(--color-danger-weak); border-color: var(--color-danger-line); color: var(--color-danger); }
-.alert-success { background: var(--color-success-weak); border-color: transparent; color: var(--color-success); }
+.alert-warning { border-left-color: var(--color-warning); color: var(--color-warning); }
+.alert-danger { border-left-color: var(--color-danger); color: var(--color-danger); }
+.alert-success { border-left-color: var(--color-success); color: var(--color-success); }
 
-/* ---------- 卡片 ---------- */
-.card {
-  background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg); padding: var(--space-5);
-}
+/* ---------- 卡片：一段内容，上方一条细线，没有边框 ---------- */
+.card { padding: var(--space-5) 0 0; border-top: 1px solid var(--color-border); }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
 .card-title { font-size: var(--text-lg); }
 .card-sub { color: var(--color-muted-fg); font-size: var(--text-sm); }
 
 .empty {
   display: grid; justify-items: start; gap: var(--space-2);
-  padding: var(--space-6); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg);
+  padding: var(--space-4) 0;
   color: var(--color-muted-fg);
 }
 .empty strong { color: var(--color-fg); font-size: var(--text-lg); font-weight: var(--weight-strong); }

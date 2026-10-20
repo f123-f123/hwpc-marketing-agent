@@ -9,17 +9,14 @@
 
 .scene-boundary {
   display: flex; align-items: flex-start; gap: var(--space-2);
-  padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
-  background: var(--color-warning-weak); color: var(--color-warning); font-size: var(--text-sm);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4); border-left: 2px solid var(--color-warning);
+  color: var(--color-warning); font-size: var(--text-sm);
 }
 .scene-boundary .icon { flex: none; margin-top: 3px; }
 
 /* ---------- 指引 ---------- */
-.coach {
-  display: flex; flex-direction: column; gap: var(--space-2);
-  padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface);
-}
-.coach.is-done { border-color: var(--color-success); background: var(--color-success-weak); }
+/* 指引：步骤 + 一句话，直接写在页面上 */
+.coach { display: flex; flex-direction: column; gap: var(--space-2); padding-bottom: var(--space-2); }
 .coach-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
 .coach-steps li { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-muted-fg); font-size: var(--text-sm); }
 .coach-dot {

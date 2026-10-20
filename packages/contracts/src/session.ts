@@ -6,6 +6,8 @@ import { ExperienceRecordSchema, FeedbackKindSchema, FeedbackRecordSchema, Impac
 import { NeedConfirmationSchema, NeedEntrySchema, NeedKeySchema, NeedSummarySchema, NeedVersionRecordSchema } from "./needs.js";
 import { NeedEditSchema, QuestionProposalSchema } from "./advisor.js";
 import { PersonalPlanSchema } from "./plan.js";
+import { ExperiencePageSchema } from "./page.js";
+import { QaTurnSchema } from "./qa.js";
 import { SceneCatalogItemSchema, SceneDefinitionSchema, SceneIdSchema, SceneInstanceSchema, SceneVersionSchema } from "./scenes.js";
 
 /* ------------------------------ 持久化记录 ------------------------------ */
@@ -64,6 +66,10 @@ export const SessionRecordSchema = z.object({
   impacts: z.array(ImpactRecordSchema),
   runState: z.object({ state: z.enum(["idle", "failed"]), at: IsoDateTimeSchema, error: z.object({ code: z.string(), message: z.string() }).optional() }),
   audit: z.array(z.object({ at: IsoDateTimeSchema, type: z.string(), detail: z.string().optional() })),
+  /** 体验页：每个方案版本一页，随方案一起生成。旧记录没有这个字段时为空。 */
+  pages: z.array(ExperiencePageSchema).default([]),
+  /** 体验页里的侧边问答（答疑智能体）。只记录，不改变需求、方案或页面。 */
+  qa: z.array(QaTurnSchema).default([]),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 
@@ -139,6 +145,10 @@ export const SessionSnapshotSchema = z.object({
     knowledge: z.object({ isMock: z.boolean() }),
     dataOrigin: z.enum(["local", "ima", "mock"]),
   }),
+  /** 当前方案对应的体验页；没有当前方案时为空。 */
+  page: ExperiencePageSchema.optional(),
+  /** 当前方案页面下的问答（时间正序）。 */
+  qa: z.array(QaTurnSchema).default([]),
   /** 会话涉及任何模拟组件或模拟场景时为 true；界面必须常驻提示。 */
   isMock: z.boolean(),
 });
@@ -148,6 +158,7 @@ export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
 
 export const CreateSessionRequestSchema = z.object({ text: z.string().min(1).max(2000) });
 export const MessageRequestSchema = z.object({ text: z.string().min(1).max(2000), baseRevision: z.number().int().nonnegative() });
+export const QaRequestSchema = z.object({ question: z.string().trim().min(1).max(1000), baseRevision: z.number().int().nonnegative() });
 export const AnswersRequestSchema = z
   .object({
     answers: z.array(z.object({ questionId: IdSchema, answer: z.string().min(1).max(1000) })).default([]),

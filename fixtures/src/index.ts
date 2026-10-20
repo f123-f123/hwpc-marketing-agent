@@ -4,3 +4,4 @@ export * from "./services.js";
 export * from "./knowledge.js";
 export * from "./scenes.js";
 export * from "./advisor.js";
+export * from "./qa.js";

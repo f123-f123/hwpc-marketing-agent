@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  QaAnswerSchema,
   applyNeedEdits,
   buildNeedSummary,
   checkApplicability,
@@ -20,7 +21,9 @@ import {
   type ConfirmRejectReason,
   type DataService,
   type DeviceKnowledgeService,
+  type ExperiencePage,
   type ExperienceRecord,
+  type FactRecord,
   type FeedbackKind,
   type FeedbackRecord,
   type ImpactRecord,
@@ -32,6 +35,8 @@ import {
   type PersonalPlan,
   type PlanProposal,
   type PlanVerification,
+  type QaEngine,
+  type QaTurn,
   type QuestionProposal,
   type RecoveryPack,
   type RecoveryPayload,
@@ -49,6 +54,8 @@ import {
 import { SessionError } from "./errors.js";
 import { applyNeedChangeImpact, applySceneInvalidationImpact } from "./impact.js";
 import type { LoadedSession, SessionStore } from "./store.js";
+import { buildExperiencePage } from "./page/build.js";
+import { NO_FILLERS, applySlotResults, collectSlotResults, hasFillableSlots, type PageFillers } from "./page/fill.js";
 
 export interface SessionServiceDeps {
   store: SessionStore;
@@ -61,6 +68,10 @@ export interface SessionServiceDeps {
   facts: RuntimeFacts;
   /** 当前实际使用的资料来源，用于快照如实展示。 */
   dataOrigin: "local" | "ima" | "mock";
+  /** 答疑智能体（体验页侧边提问），与顾问引擎相互独立。 */
+  qa: QaEngine;
+  /** 体验页内容位填充器。 */
+  fillers: PageFillers;
 }
 
 const now = () => new Date().toISOString();
@@ -127,6 +138,8 @@ export async function createSession(text: string, deps: SessionServiceDeps): Pro
     impacts: [],
     runState: { state: "idle", at: t },
     audit: [{ at: t, type: "session_created", detail: `首条消息: ${text.slice(0, 60)}` }],
+    pages: [],
+    qa: [],
   };
   deps.store.save(record);
   return handleMessage(sessionId, text, 0, deps);
@@ -533,8 +546,81 @@ export async function composePlan(sessionId: string, baseRevision: number, deps:
   }
   rec.plans.push(plan);
   rec.planNotes = planNotes.map((text) => ({ at: t, text }));
-  rec.audit.push({ at: t, type: "plan_composed", detail: `v${version}；${newInstances.length} 个场景` });
+  const page = await composePage(rec, plan, deps, t);
+  rec.pages.push(page);
+  rec.audit.push({ at: t, type: "plan_composed", detail: `v${version}；${newInstances.length} 个场景；体验页 ${page.sections.length} 个版块` });
   rec.runState = { state: "idle", at: t };
+  commit(deps, rec);
+  return buildSnapshot(rec, deps);
+}
+
+/* ------------------------------ 体验页 ------------------------------ */
+
+/** 方案确定后生成体验页骨架。资料取不到不影响生成：介绍文案位留空，由填充器或占位处理。 */
+async function composePage(rec: SessionRecord, plan: PersonalPlan, deps: SessionServiceDeps, t: string): Promise<ExperiencePage> {
+  const facts: Record<string, FactRecord[]> = {};
+  await Promise.all(
+    plan.candidates.map(async (c) => {
+      try {
+        const pack = await deps.data.getMaterialPack({ taskId: `page-${rec.sessionId}-${plan.version}`, product: c.product, maxImages: 0 });
+        facts[c.product.productId] = pack.facts.filter((f) => f.productId === c.product.productId);
+      } catch {
+        facts[c.product.productId] = [];
+      }
+    }),
+  );
+  const sceneTitles = Object.fromEntries(Object.entries(rec.sceneDefinitions).map(([k, d]) => [k, d.title]));
+  const page = buildExperiencePage({
+    plan,
+    needs: rec.needVersions.find((v) => v.version === plan.needVersion)?.entries ?? [],
+    sceneTitles,
+    facts,
+    isMock: plan.isMock,
+    now: t,
+    newId,
+  });
+  page.filling = hasFillableSlots(page, deps.fillers);
+  return page;
+}
+
+/** 把填充器的结果写回指定方案版本的页面；页面已被取代或已填过的位置不动。 */
+export function applyPageFill(sessionId: string, planVersion: number, results: Parameters<typeof applySlotResults>[1], deps: SessionServiceDeps): SessionSnapshot {
+  const rec = loadForWrite(deps, sessionId, undefined);
+  const page = rec.pages.find((p) => p.planVersion === planVersion);
+  if (!page) return buildSnapshot(rec, deps);
+  const t = now();
+  const changed = applySlotResults(page, results, t);
+  const wasFilling = page.filling;
+  page.filling = false;
+  if (!changed && !wasFilling) return buildSnapshot(rec, deps);
+  rec.audit.push({ at: t, type: "page_filled", detail: `方案 v${planVersion}：${results.length} 个内容位` });
+  commit(deps, rec);
+  return buildSnapshot(rec, deps);
+}
+
+/* ------------------------------ 体验页侧边提问（答疑智能体） ------------------------------ */
+
+/**
+ * 只记录问答，不改需求、方案和页面。答疑引擎出错时记一条失败的问答，不影响会话其他状态。
+ */
+export async function askQuestion(sessionId: string, question: string, baseRevision: number, deps: SessionServiceDeps): Promise<SessionSnapshot> {
+  const rec = loadForWrite(deps, sessionId, baseRevision);
+  const plan = rec.plans.find((p) => p.status === "current");
+  const page = plan ? rec.pages.find((p) => p.planVersion === plan.version) : undefined;
+  if (!plan || !page) throw new SessionError("invalid_state", "还没有生成体验页，请先确认需求并生成方案");
+  const t = now();
+  const history = rec.qa.filter((q) => q.planVersion === plan.version && !q.failed).slice(-6).map((q) => ({ question: q.question, reply: q.reply }));
+  let turn: QaTurn;
+  try {
+    const answer = QaAnswerSchema.parse(
+      await deps.qa.answer({ page, plan, needs: rec.needVersions.find((v) => v.version === plan.needVersion)?.entries ?? [], history }, question, { data: deps.data }),
+    );
+    turn = { turnId: newId(), at: t, planVersion: plan.version, question, ...answer, isMock: deps.qa.isMock, failed: false };
+  } catch (e) {
+    turn = { turnId: newId(), at: t, planVersion: plan.version, question, reply: `暂时无法回答：${errorText(e)}`, citations: [], suggestNeedChange: false, isMock: deps.qa.isMock, failed: true };
+  }
+  rec.qa.push(turn);
+  rec.audit.push({ at: t, type: "qa", detail: question.slice(0, 60) });
   commit(deps, rec);
   return buildSnapshot(rec, deps);
 }
@@ -1009,6 +1095,7 @@ function buildSnapshot(rec: SessionRecord, deps: SessionServiceDeps): SessionSna
         : "awaiting_confirmation";
 
   const currentPlan = rec.plans.find((p) => p.status === "current");
+  const currentPage = currentPlan ? rec.pages.find((p) => p.planVersion === currentPlan.version) : undefined;
   const canCompose = conf !== undefined && rec.runState.state !== "failed";
   const cannotComposeReason = !conf ? "需要先确认需求" : rec.runState.state === "failed" ? "引擎出错" : undefined;
 
@@ -1049,6 +1136,8 @@ function buildSnapshot(rec: SessionRecord, deps: SessionServiceDeps): SessionSna
     scenes: { instances, catalog },
     feedback: rec.feedback,
     impacts: rec.impacts,
+    ...(currentPage ? { page: currentPage } : {}),
+    qa: currentPlan ? rec.qa.filter((q) => q.planVersion === currentPlan.version) : [],
     capabilities: declareCapabilities(deps.profile, deps.facts),
     components: {
       engine: { isMock: rec.usedMock.engine },
@@ -1081,6 +1170,12 @@ export function getSession(sessionId: string, deps: SessionServiceDeps): Session
 
 /* ------------------------------ 会话管理器（HTTP 层使用） ------------------------------ */
 
+/** 没有接入答疑智能体时使用：如实告诉用户未配置，而不是假装回答。 */
+const UNCONFIGURED_QA: QaEngine = {
+  isMock: false,
+  answer: () => Promise.reject(new Error("答疑智能体尚未配置")),
+};
+
 export interface SessionManagerOptions {
   store: SessionStore;
   engine?: AdvisorEngine;
@@ -1093,6 +1188,10 @@ export interface SessionManagerOptions {
   profile?: RuntimeProfile;
   facts?: RuntimeFacts;
   dataOrigin?: "local" | "ima" | "mock";
+  /** 答疑智能体；不提供时提问会得到“未配置”的失败回复。 */
+  qa?: QaEngine;
+  /** 体验页内容填充器；默认不配置（图片位保持占位）。 */
+  fillers?: PageFillers;
 }
 
 /**
@@ -1118,6 +1217,8 @@ export class SessionManager {
       profile: opts.profile ?? "server_local",
       facts: opts.facts ?? { modelConfigured: false, imaConnected: false, persistent: opts.store.persistent },
       dataOrigin: opts.dataOrigin ?? "local",
+      qa: opts.qa ?? UNCONFIGURED_QA,
+      fillers: opts.fillers ?? NO_FILLERS,
     };
   }
 
@@ -1177,8 +1278,26 @@ export class SessionManager {
     return this.run(sessionId, async () => confirmNeeds(sessionId, needVersion, fingerprint, baseRevision, this.deps));
   }
 
-  compose(sessionId: string, baseRevision: number): Promise<SessionSnapshot> {
-    return this.run(sessionId, () => composePlan(sessionId, baseRevision, this.deps));
+  async compose(sessionId: string, baseRevision: number): Promise<SessionSnapshot> {
+    const snap = await this.run(sessionId, () => composePlan(sessionId, baseRevision, this.deps));
+    if (snap.page?.filling) void this.fillPage(sessionId, snap.page);
+    return snap;
+  }
+
+  /** 填充在写队列之外跑（可能调用外部接口），结果再进队列写回。 */
+  private async fillPage(sessionId: string, page: ExperiencePage): Promise<void> {
+    const needs = this.get(sessionId).needs.entries;
+    let results: Awaited<ReturnType<typeof collectSlotResults>> = [];
+    try {
+      results = await collectSlotResults(page, this.deps.fillers, { needs });
+    } catch {
+      results = [];
+    }
+    await this.run(sessionId, async () => applyPageFill(sessionId, page.planVersion, results, this.deps)).catch(() => undefined);
+  }
+
+  ask(sessionId: string, question: string, baseRevision: number): Promise<SessionSnapshot> {
+    return this.run(sessionId, () => askQuestion(sessionId, question, baseRevision, this.deps));
   }
 
   explore(sessionId: string, sceneId: string, version: number | undefined, baseRevision?: number): Promise<SessionSnapshot> {

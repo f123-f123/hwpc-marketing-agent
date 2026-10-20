@@ -92,9 +92,8 @@ export function ChatPanel({ snap, busy, actions, onOpenScene }: {
         <ol className="messages" aria-live="polite">
           {messages.map((m) => (
             <li key={m.messageId} className={`msg msg-${m.role}`}>
-              {m.role !== "user" && <span className="msg-avatar" aria-hidden="true">顾</span>}
-              <div className="msg-bubble">
-                <span className="sr-only">{m.role === "user" ? "我：" : "顾问："}</span>
+              <span className="msg-who">{m.role === "user" ? "我" : m.role === "advisor" ? "顾问" : "提示"}</span>
+              <div className="msg-body">
                 <p>{m.text}</p>
                 {m.suggestedScenes && m.suggestedScenes.length > 0 && (
                   <div className="msg-suggest">
@@ -110,8 +109,8 @@ export function ChatPanel({ snap, busy, actions, onOpenScene }: {
           ))}
           {busy && (
             <li className="msg msg-advisor" aria-label="顾问正在处理">
-              <span className="msg-avatar" aria-hidden="true">顾</span>
-              <div className="msg-bubble msg-typing"><span /><span /><span /></div>
+              <span className="msg-who">顾问</span>
+              <div className="msg-body msg-typing"><span /><span /><span /></div>
             </li>
           )}
         </ol>

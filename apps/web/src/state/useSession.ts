@@ -18,6 +18,7 @@ export interface SessionActions {
   explore: (sceneId: string, version: number) => Promise<SessionSnapshot | null>;
   action: (instanceId: string, actionId: string) => Promise<SessionSnapshot | null>;
   feedback: (input: FeedbackInput) => Promise<SessionSnapshot | null>;
+  ask: (question: string) => Promise<SessionSnapshot | null>;
   reset: () => void;
   retry: () => void;
   dismiss: () => void;
@@ -70,6 +71,23 @@ export function useSession() {
     void restore();
   }, [restore]);
 
+  // 体验页的内容位还在填充时轮询，填完（或一分钟后）停止。只读请求，不占用 busy。
+  const filling = snap?.page?.filling === true;
+  const sessionId = snap?.sessionId;
+  useEffect(() => {
+    if (!filling || !sessionId) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      if (tries > 40) return clearInterval(timer);
+      api.get(sessionId).then((s) => {
+        // 只在没有更新的写入时采用，避免覆盖用户刚做的操作
+        if (snapRef.current && s.revision >= snapRef.current.revision) adopt(s);
+      }, () => undefined);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [filling, sessionId, adopt]);
+
   const run = useCallback(
     async (call: (s: SessionSnapshot | null) => Promise<SessionSnapshot>): Promise<SessionSnapshot | null> => {
       setBusy(true);
@@ -108,6 +126,7 @@ export function useSession() {
     explore: (sceneId, version) => withSnap((s) => api.explore(s, sceneId, version)),
     action: (instanceId, actionId) => withSnap((s) => api.action(s, instanceId, actionId)),
     feedback: (input) => withSnap((s) => api.feedback(s, input)),
+    ask: (question) => withSnap((s) => api.ask(s, question)),
     reset: () => {
       setSnap(null);
       setNotice(null);

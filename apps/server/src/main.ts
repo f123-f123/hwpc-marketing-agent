@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { createWorkflow } from "@hwpc/agent";
 import { createDataService, createDeviceKnowledgeService } from "@hwpc/data";
-import { createMockAdvisorEngine, createMockKnowledgeService, mockSceneDefinitions } from "@hwpc/fixtures";
+import { createMockAdvisorEngine, createMockKnowledgeService, createMockQaEngine, mockSceneDefinitions } from "@hwpc/fixtures";
 import { registeredSceneDefinitions } from "@hwpc/scenes";
 import { createApp } from "./app.js";
 import { loadConfig, maskSecret } from "./config.js";
@@ -40,7 +40,10 @@ const knowledge = cfg.dataMode === "mock" ? createMockKnowledgeService() : creat
 
 const sessions = new SessionManager({
   store,
+  // 两个智能体相互独立：顾问引擎负责需求沟通与生成方案/体验页，答疑引擎只回答体验页里的提问。
+  // 接入真实模型时分别替换（见 apps/server/README.md）。
   advisor: createMockAdvisorEngine(),
+  qa: createMockQaEngine(),
   data,
   model,
   knowledge,

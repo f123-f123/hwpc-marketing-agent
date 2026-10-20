@@ -25,17 +25,53 @@ $env:DATA_SOURCE_MODE='mock'; npm run dev:server   # 显式 MOCK 演示（引擎
 | POST | `/api/sessions/:id/answers` | 回答已提出的问题 |
 | POST | `/api/sessions/:id/needs` | 用户直接编辑需求（`user_direct`） |
 | POST | `/api/sessions/:id/confirm` | 确认需求版本（`needVersion + fingerprint`） |
-| POST | `/api/sessions/:id/plan` | 组装个人方案（必须有有效确认） |
+| POST | `/api/sessions/:id/plan` | 组装个人方案（必须有有效确认），同时生成体验页（快照里的 `page`） |
 | POST | `/api/sessions/:id/explore` | 说明性浏览已注册场景 |
 | POST | `/api/sessions/:id/instances/:instanceId/actions` | 场景动作 |
 | POST | `/api/sessions/:id/feedback` | 明确反馈 → 影响分析 |
 | POST | `/api/sessions/:id/resume` | 清除失败状态 |
+| POST | `/api/sessions/:id/qa` | 体验页侧边提问 `{question, baseRevision}`：答疑智能体回答，只记录，不改需求/方案/页面 |
 | GET | `/api/sessions/:id/export?format=recovery_json\|recovery_html` | 只读恢复包 |
 | POST | `/api/recovery/verify` | 校验恢复包完整性 |
 
 写操作都带 `baseRevision`；过期返回 `409 stale_revision` 并附最新快照。同一会话的异步写操作在 `SessionManager` 内串行执行。
 
 旧营销接口 `/api/tasks/*` 仍在，但面试/演示的主链路是上表。
+
+## 体验页（`src/page/`）
+
+需求确认、组装方案时，`page/build.ts` 按方案生成体验页结构：开场 → 你的日常 → 每个候选一屏 → 动手体验 → 方案。
+它是纯函数、当场完成，不等模型；页面绑定方案版本，之后的提问不会修改它，需求变化要重新确认、重新生成。
+
+文案只有两种来源：方案与需求里已有的文字，以及知识库事实原值（`selectFacts` 过滤后取前几条，带限制条件，`origin: "template"`）。
+图片位一律先留空（`pending`），界面显示占位并写明这里应该放什么。
+
+### 体验页内容填充
+
+`page/fill.ts` 定义两类填充器，在 `main.ts` 里通过 `SessionManager({ fillers })` 注册，默认一个都没有：
+
+```ts
+const fillers: PageFillers = {
+  images: [myImageProvider],   // ImageProvider：按 slot.intent / slot.product / slot.roles 找图
+  copies: [myCopyProvider],    // CopyProvider：改写介绍文案；事实仍只能来自知识库原文
+};
+```
+
+- 每个结果必须带 `origin`（`local` / `ima` / `official_web` / `web` / `illustration` / `template` / `model`），界面据此标注来源；`web` 显示为“网络图片 · 仅供参考”。
+- 找不到就返回 `null`，不要编造；所有填充器都落空的位置记为 `failed`，界面仍显示占位。
+- 填充在会话写队列之外进行（可以调用外部接口），结果再进队列写回，只更新仍是 `pending` 的位置；期间页面被新方案取代，结果直接丢弃。
+- 有可填的空位时快照里 `page.filling = true`，前端每 1.5 秒轮询一次，填完停止。
+
+建议的接入顺序：本地知识库 `图片索引.csv`（官网产品图，带来源与说明）→ 官网页面 → 检索 API。
+
+### 答疑智能体
+
+体验页里的侧边提问由 `QaEngine`（`packages/contracts/src/qa.ts`）回答，和负责需求沟通、生成方案的 `AdvisorEngine` 是两个独立的智能体，可以接不同的模型。
+
+- 它只看到只读视图（页面、方案、已确认的需求、最近几轮问答），接口里没有任何写入口；服务端只把问答追加到会话记录。
+- 问题实际上是在改需求时，返回 `suggestNeedChange: true`，界面显示“回到需求沟通”，页面本身不变。
+- 当前接的是 `fixtures` 的模拟答疑（关键词规则，回复带“模拟答疑”前缀）；没有配置时提问会得到“答疑智能体尚未配置”的失败回复，而不是假装回答。
+- 接入真实模型：实现 `QaEngine.answer(view, question, deps)`，在 `main.ts` 里替换 `createMockQaEngine()`。
 
 ## 门店推文模块（`src/marketing/`）
 

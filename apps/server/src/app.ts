@@ -18,7 +18,7 @@ import {
   type ExportResponse,
   type ModelService,
   AnswersRequestSchema, ComposePlanRequestSchema, ConfirmRequestSchema, CreateSessionRequestSchema,
-  ExploreRequestSchema, FeedbackRequestSchema, MessageRequestSchema, NeedEditRequestSchema,
+  ExploreRequestSchema, FeedbackRequestSchema, MessageRequestSchema, NeedEditRequestSchema, QaRequestSchema,
   SceneActionRequestSchema, SessionExportQuerySchema,
   verifyRecoveryPack,
 } from "@hwpc/contracts";
@@ -132,6 +132,8 @@ export function createApp(deps: AppDeps) {
     app.post("/api/sessions/:id/explore", async (c) => { const b = await body(c, ExploreRequestSchema); return c.json(await s.explore(c.req.param("id"), b.sceneId, b.version, b.baseRevision)); });
     app.post("/api/sessions/:id/instances/:instanceId/actions", async (c) => { const b = await body(c, SceneActionRequestSchema); return c.json(await s.action(c.req.param("id"), c.req.param("instanceId"), b.actionId, b.baseRevision)); });
     app.post("/api/sessions/:id/feedback", async (c) => c.json(await s.feedback(c.req.param("id"), await body(c, FeedbackRequestSchema))));
+    // 体验页侧边提问：只记录问答，不改需求、方案和页面
+    app.post("/api/sessions/:id/qa", async (c) => { const b = await body(c, QaRequestSchema); return c.json(await s.ask(c.req.param("id"), b.question, b.baseRevision)); });
     app.post("/api/sessions/:id/resume", async (c) => { const b = await optionalBody(c, ResumeRequestSchema); return c.json(await s.resume(c.req.param("id"), b.baseRevision)); });
     app.get("/api/sessions/:id/export", (c) => {
       const q = SessionExportQuerySchema.safeParse({ format: c.req.query("format"), planVersion: c.req.query("planVersion") });
