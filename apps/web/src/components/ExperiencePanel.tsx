@@ -4,7 +4,7 @@ import { showroomSpace, type Hotspot } from "@hwpc/scenes";
 import type { FeedbackInput } from "../api/client";
 import { COMPLETION_LABEL } from "../lib/labels";
 import { KEYS, readJson, writeJson } from "../lib/storage";
-import { Panorama, isView, type View } from "../scenes/Panorama";
+import { DEFAULT_VIEW, Panorama, isView, type View } from "../scenes/Panorama";
 import { SceneTask } from "./SceneTask";
 import { Badge, EmptyState, Icon, PanelHead } from "./ui";
 
@@ -19,13 +19,7 @@ export function ExperiencePanel({ snap, busy, active, onEnter, onClose, onActivi
   onFeedback: (input: FeedbackInput) => Promise<unknown>;
 }) {
   // 视角只在本面板内变化：拖动时不会让整页重渲染；停下 300ms 后再写入本地。
-  // 第一次进入时朝向第一个可体验的场景热点，而不是一面空墙。
-  const [view, setView] = useState<View>(() => {
-    const saved = readJson(KEYS.view, isView);
-    if (saved) return saved;
-    const first = showroomSpace.hotspots.find((h) => h.target.type === "scene" && snap.scenes.catalog.some((c) => c.sceneId === (h.target as { sceneId: string }).sceneId && c.integrity === "ok"));
-    return { yaw: first ? first.yaw + 20 : 0, pitch: 0 };
-  });
+  const [view, setView] = useState<View>(() => readJson(KEYS.view, isView) ?? DEFAULT_VIEW);
   useEffect(() => {
     const t = setTimeout(() => writeJson(KEYS.view, view), 300);
     return () => clearTimeout(t);
@@ -67,7 +61,7 @@ export function ExperiencePanel({ snap, busy, active, onEnter, onClose, onActivi
       <PanelHead
         id="experience-title"
         title="场景体验"
-        description="把功能放回真实的使用问题。以下都是虚拟流程演示，走完不代表在你的设备上测试通过。"
+        description="站在房间里环顾四周，点桌上的设备进入任务，亲手操作一遍。都是虚拟流程演示，走完不代表在你的设备上测试通过。"
         aside={assigned.length ? <Badge tone="primary">{assigned.length} 个方案任务</Badge> : <Badge>通用浏览</Badge>}
       />
       <Panorama

@@ -181,7 +181,7 @@ export interface DesignBasis {
 
 export interface AssetDecl {
   assetId: string;
-  kind: "generated_css" | "generated_svg" | "product_image";
+  kind: "generated_css" | "generated_svg" | "generated_3d" | "product_image";
   usage: string;
   origin: string;
   /** 示意素材不得被称为产品图片。 */

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { validateSceneConfig, type FeedbackKind, type InstanceView } from "@hwpc/contracts";
 import type { FeedbackInput } from "../api/client";
 import { APPLICABILITY_LABEL, COMPLETION_LABEL } from "../lib/labels";
+import { stageFor } from "../scenes/stages";
 import { Alert, Badge, Icon } from "./ui";
 
 const FEEDBACK_BUTTONS: [FeedbackKind, string][] = [
@@ -21,12 +22,11 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
   const { instance, definition: def, experience } = view;
   const [feedback, setFeedback] = useState("");
   const config = validateSceneConfig(def, instance.params);
-  const current = def.states.find((s) => s.stateId === experience.currentStateId);
   const active = instance.status === "active" && !view.invalidation && !view.registryDrift && config.ok;
   const openConditions = instance.applicability.openConditions.filter((c) => !instance.confirmedConditionKeys.includes(c.conditionKey));
-  const available = def.actions.filter((a) => a.from.includes(experience.currentStateId));
   const reached = def.outcomes.filter((o) => experience.reachedOutcomeIds.includes(o.outcomeId));
   const configText = Object.entries(config.values).map(([k, v]) => `${def.configSchema.find((f) => f.key === k)?.label ?? k}：${String(v)}`);
+  const Stage = stageFor(def);
 
   const submitFeedback = async (kind: FeedbackKind) => {
     const text = feedback.trim();
@@ -37,7 +37,7 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
   return (
     <article className="scene" aria-labelledby="scene-title">
       <header className="scene-head">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="back" />返回全景</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="back" />返回空间</button>
         <div className="row">
           <Badge tone={instance.mode === "personal" ? "primary" : "neutral"}>{instance.mode === "personal" ? `个人方案 v${instance.planVersion}` : "通用说明"}</Badge>
           <Badge tone={experience.completion === "walkthrough_completed" ? "success" : "neutral"}>{COMPLETION_LABEL[experience.completion]}</Badge>
@@ -49,7 +49,7 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
         <p className="scene-summary">{view.summary}</p>
       </div>
 
-      <Alert tone="warning"><strong>功能流程演示：</strong>{def.demoBoundary.statement}</Alert>
+      <p className="scene-boundary"><Icon name="alert" /><span><strong>功能流程演示</strong>：{def.demoBoundary.statement}</span></p>
 
       {view.invalidation && <Alert tone="danger">场景版本已失效：{view.invalidation.reason}</Alert>}
       {view.registryDrift && <Alert tone="danger">场景内容与注册表不一致，操作已停用。</Alert>}
@@ -57,6 +57,12 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
       {instance.status !== "active" && !view.invalidation && <Alert>该任务已不是当前方案的一部分{instance.invalidReason ? `：${instance.invalidReason}` : ""}。</Alert>}
       {view.knowledgeScope === "outside_pc_knowledge_base" && <Alert tone="warning">此任务超出 PC 知识库范围，相关设备事实未经该库核实。</Alert>}
       {instance.applicability.isMock && <Alert tone="warning">此场景包含模拟资料或设备，虚拟成功不能作为实机证据。</Alert>}
+
+      <Stage key={instance.instanceId} view={view} disabled={busy || !active} onAction={onAction} />
+
+      {reached.map((o) => (
+        <Alert key={o.outcomeId} tone="success"><strong>{o.label}：</strong>{o.statement}</Alert>
+      ))}
 
       <section className="scene-applicability" aria-label="适用性">
         <p><strong>{APPLICABILITY_LABEL[instance.applicability.result]}</strong>{instance.applicability.reasons.length > 0 && <span className="muted">　{instance.applicability.reasons.map((r) => r.text).join("；")}</span>}</p>
@@ -75,45 +81,16 @@ export function SceneTask({ view, busy, onAction, onFeedback, onClose }: {
         )}
       </section>
 
-      <ol className="scene-steps" aria-label="流程">
-        {def.states.map((s) => {
-          const isCurrent = s.stateId === experience.currentStateId;
-          const visited = experience.visitedStateIds.includes(s.stateId);
-          return (
-            <li key={s.stateId} className={isCurrent ? "is-current" : visited ? "is-done" : undefined} aria-current={isCurrent ? "step" : undefined}>
-              <span className="scene-step-dot" aria-hidden="true">{visited && !isCurrent ? <Icon name="check" size={12} /> : null}</span>
-              {s.label}
-            </li>
-          );
-        })}
-      </ol>
-
-      <section className="scene-stage" aria-label="当前步骤">
-        <p className="scene-stage-label">当前：{current?.label ?? experience.currentStateId}</p>
-        {current?.description && <p className="muted">{current.description}</p>}
-        {available.length > 0 ? (
-          <div className="row">
-            {available.map((a, i) => (
-              <button key={a.actionId} type="button" className={i === 0 ? "btn btn-primary" : "btn"} disabled={busy || !active} onClick={() => onAction(a.actionId)}>
-                {a.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="muted small">{current?.terminal ? "流程已走完。" : "当前步骤没有可执行的操作。"}</p>
+      <details className="scene-more">
+        <summary>依据与说明</summary>
+        {def.evidence.length > 0 && (
+          <ul className="small">
+            {def.evidence.map((e, i) => <li key={i}>流程依据：{e.source.title}</li>)}
+          </ul>
         )}
-        {reached.map((o) => (
-          <Alert key={o.outcomeId} tone="success"><strong>{o.label}：</strong>{o.statement}</Alert>
-        ))}
-      </section>
-
-      {(configText.length > 0 || view.caveats.length > 0) && (
-        <details className="scene-more">
-          <summary>配置与说明</summary>
-          {configText.length > 0 && <p className="small">配置：{configText.join("；")}</p>}
-          {view.caveats.length > 0 && <ul className="small muted">{view.caveats.map((c, i) => <li key={i}>{c}</li>)}</ul>}
-        </details>
-      )}
+        {configText.length > 0 && <p className="small">配置：{configText.join("；")}</p>}
+        {view.caveats.length > 0 && <ul className="small muted">{view.caveats.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+      </details>
 
       <section className="scene-feedback" aria-labelledby="scene-feedback-title">
         <h3 id="scene-feedback-title">有想法？明确告诉顾问</h3>

@@ -207,12 +207,17 @@
 /* ---------- 体验 ---------- */
 .pano-wrap { display: flex; flex-direction: column; gap: var(--space-2); }
 .pano {
-  position: relative; height: 380px; overflow: hidden; border-radius: var(--radius-md);
+  position: relative; height: 440px; overflow: hidden; border-radius: var(--radius-md);
   background: var(--color-surface-sunken); touch-action: pan-y; cursor: grab; user-select: none;
 }
 .pano:active { cursor: grabbing; }
+.pano.is-pointing { cursor: pointer; }
 .pano:focus-visible { outline-offset: 3px; }
-.pano > svg { width: 100%; height: 100%; display: block; }
+.pano-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.pano-loading { display: grid; place-items: center; color: var(--color-muted-fg); cursor: default; }
+.pano-failed { display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); height: auto; min-height: 200px; padding: var(--space-5); cursor: default; }
+.pano-failed .hot { position: static; transform: none; }
+.pano-tag { position: absolute; left: var(--space-2); bottom: var(--space-2); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-muted-fg); font-size: var(--text-xs); line-height: 22px; }
 .hot {
   position: absolute; transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; gap: var(--space-2);
@@ -221,11 +226,10 @@
   background: var(--color-surface); box-shadow: var(--shadow-2); font-size: var(--text-sm);
   transition: border-color var(--duration-fast), transform var(--duration-fast);
 }
-.hot:hover, .hot:focus-visible { border-color: var(--color-primary); color: var(--color-primary); }
+.hot:hover, .hot:focus-visible, .hot.is-hover { border-color: var(--color-primary); color: var(--color-primary); }
 .hot.is-recommended { border-color: var(--color-primary); }
 .hot-tag { padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--color-primary-weak); color: var(--color-primary); font-size: var(--text-xs); line-height: 20px; }
 .hot.is-done .hot-tag { background: var(--color-success-weak); color: var(--color-success); }
-.pano-hud { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-muted-fg); font-size: var(--text-xs); }
 .pano-ctl { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 
 .tasks { list-style: none; padding: 0; display: grid; gap: var(--space-2); }
@@ -245,15 +249,7 @@
 .scene-title { font-size: var(--text-2xl); }
 .scene-summary { color: var(--color-fg-secondary); margin-top: var(--space-1); }
 .scene-applicability { display: flex; flex-direction: column; gap: var(--space-2); }
-.scene-steps { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
-.scene-steps li { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-muted-fg); font-size: var(--text-sm); }
-.scene-step-dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-pill); border: 1.5px solid var(--color-border-strong); background: var(--color-surface); }
-.scene-steps li.is-done { color: var(--color-success); }
-.scene-steps li.is-done .scene-step-dot { border-color: var(--color-success); background: var(--color-success); color: var(--color-primary-fg); }
-.scene-steps li.is-current { color: var(--color-fg); font-weight: var(--weight-strong); }
-.scene-steps li.is-current .scene-step-dot { border-color: var(--color-primary); box-shadow: inset 0 0 0 4px var(--color-primary); }
 .scene-stage { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5); background: var(--color-surface-muted); border-radius: var(--radius-md); }
-.scene-stage-label { font-weight: var(--weight-strong); font-size: var(--text-lg); }
 .scene-more summary, .fold > summary { color: var(--color-fg-secondary); font-size: var(--text-sm); }
 .scene-more[open] > :not(summary) { margin-top: var(--space-2); }
 .scene-feedback { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }

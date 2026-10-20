@@ -4,6 +4,7 @@ import { App } from "./App";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/app.css";
+import "./styles/scenes.css";
 import "./styles/marketing.css";
 
 createRoot(document.getElementById("root")!).render(

@@ -73,6 +73,49 @@
   --font-ui: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 
   --duration-fast: 0.15s;
+
+  /*
+   * 场景模拟：只用于 scenes.css 里的虚拟设备与桌面。
+   * 设备屏幕里是“另一台设备的界面”，所以有自己的一套材质色与界面色；不要在应用界面里使用。
+   */
+  --sim-wall-top: #efebe4;
+  --sim-wall-bottom: #e2dcd2;
+  --sim-desk-top: #cdb08a;
+  --sim-desk-front: #a98a63;
+  --sim-desk-shadow: rgb(70 50 30 / 22%);
+  --sim-device: #1c1e22;
+  --sim-device-edge: #3b3e44;
+  --sim-alu-hi: #eceef1;
+  --sim-alu-lo: #b3b7be;
+  --sim-graphite-hi: #8e939b;
+  --sim-graphite-lo: #5d6168;
+  --sim-screen-off: #0d0e11;
+  --sim-wall-cool: linear-gradient(140deg, #8fc0e4 0%, #5b86c2 42%, #2c3c6b 100%);
+  --sim-wall-warm: linear-gradient(150deg, #f0c9a5 0%, #c98e80 48%, #5a4a70 100%);
+  --sim-phone-wall: linear-gradient(170deg, #b9d7ef 0%, #7a9fd1 45%, #3e4f86 100%);
+  --sim-glass: rgb(250 250 252 / 88%);
+  --sim-glass-line: rgb(255 255 255 / 60%);
+  --sim-taskbar: rgb(243 244 247 / 86%);
+  --sim-ink: #1b1d21;
+  --sim-ink-soft: #5b616b;
+  --sim-on-dark: #f5f6f8;
+  --sim-select: #2f6fe0;
+  --sim-select-weak: rgb(47 111 224 / 14%);
+  --sim-ok: #1f8a4c;
+  --sim-device-shadow: 0 22px 36px -18px rgb(20 24 31 / 55%), 0 4px 10px rgb(20 24 31 / 16%);
+  --sim-window-shadow: 0 10px 28px rgb(10 14 22 / 28%);
+  --sim-sheet-shadow: 0 -8px 24px rgb(10 14 22 / 18%);
+  --sim-hover-on-dark: rgb(255 255 255 / 18%);
+  --sim-text-shadow: 0 1px 2px rgb(0 0 0 / 45%);
+  --sim-next-ring: rgb(199 0 11 / 55%);
+  --sim-app-a: linear-gradient(140deg, #ffb36b, #f0646c);
+  --sim-app-b: linear-gradient(140deg, #8a9099, #4d525a);
+  --sim-app-c: linear-gradient(140deg, #ffd36b, #f0a53a);
+  --sim-app-d: linear-gradient(140deg, #9aa3ad, #6a727d);
+  --sim-app-e: linear-gradient(140deg, #ff8a7a, #e0484f);
+  --sim-app-f: linear-gradient(140deg, #ffe58a, #f5c64a);
+  --sim-app-g: linear-gradient(140deg, #ff7aa8, #d9467d);
+  --sim-app-h: linear-gradient(140deg, #6fb7ff, #3a7be0);
 }
 
 /* 动效只用于状态反馈；尊重系统的减少动态偏好 */

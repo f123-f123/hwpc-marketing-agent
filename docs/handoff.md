@@ -54,8 +54,10 @@ apps/web/src
   App.tsx            hash 路由：#/advisor（默认，免登录）、#/posts、#/hq、#/settings
   components/        选购顾问：Home / Workspace / ChatPanel / NeedsPanel / CandidatesPanel / ExperiencePanel / SceneTask / PlanPanel
   components/marketing/  推文：Login / StoreHome / CampaignWorkbench / PostPanel / Previews（含海报 PNG）/ AssistSheet / VerifyReport / ArticleEditor / StoreSettings / HqCampaigns / HqSettings
-  styles/            tokens.css → base.css → app.css / marketing.css（只用设计变量）
-scenes               声明式场景库
+  scenes/            场景体验渲染层：Room3D（three.js 三维空间，按需加载）+ room/（布置、贴图、渲染器）
+                     flows/（每个场景的操作流程，纯函数，有测试）+ stages/（虚拟设备舞台：FileTransfer / MultiScreen / Generic）
+  styles/            tokens.css → base.css → app.css / scenes.css / marketing.css（只用设计变量；设备材质色是 --sim-*）
+scenes               声明式场景库（服务端注册的状态机 publicDefinitions.ts；空间热点 space.ts）
 fixtures             MOCK 数据与模拟顾问引擎
 ```
 
@@ -69,6 +71,13 @@ fixtures             MOCK 数据与模拟顾问引擎
 
 ### 选购顾问（第一阶段，已提交）
 对话工作台、需求确认门、候选取舍、全景 + 场景任务、个人方案、导出只读快照均可运行；顾问引擎仍是 `fixtures` 的**关键词规则模拟**。
+
+**场景体验（2026-10-20 重做，用户反馈“场景太假”）**
+- 空间：程序绘制的三维书房（窗、阳光投影、书桌 + 外接显示器、窗边小桌 + 手机、比较台、软木板），拖动环顾、点陈设或热点进入任务，视角保存在本地。热点 yaw/pitch 必须与 `room/build.ts` 的 `ANCHORS` 一致（有测试）。WebGL 不可用时退回按钮列表。
+- 任务：在虚拟手机 / 电脑 / 显示器上亲手操作（下拉控制面板开 WLAN 和蓝牙 → 图库选照片 → 分享给附近的电脑 → 电脑上接收 → 打开核对大小；看显示器型号信息 → 投屏面板连接 → 选镜像 / 扩展 → 拖动窗口）。屏幕上有指引条和高亮环。
+- **服务端状态机与契约没有改**：手势只在关键节点提交原有动作（check / connect / authorize / send …），已保存的会话、版本锁、完成记录不受影响。专属渲染器只接状态与动作完全对得上的冻结定义，场景升级后结构变化会自动退回通用渲染器。
+- 界面是**通用示意**，不复刻官方菜单名称和路径（支持卡 HW-SUPPORT-31 / 41 要求“未列出的路径不猜测”）；设备不带品牌标识，照片是程序画的风景。
+- 新增场景：在 `scenes/src/publicDefinitions.ts` 注册状态机 → `apps/web/src/scenes/flows/` 写流程（reduce / view / coach / hint）→ `stages/` 写舞台 → `stages/index.ts` 登记；房间里要有入口就在 `room/build.ts` 加陈设和锚点，再在 `space.ts` 加热点。
 
 ## 四、已知问题与待办（按优先级）
 
