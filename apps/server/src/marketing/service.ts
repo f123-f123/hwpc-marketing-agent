@@ -528,11 +528,14 @@ function renderExport(input: { post: Post; chosen: { article: Article; report: P
   }
   if (post.gaps.length) lines.push("", `资料缺口：${post.gaps.join("；")}`);
   lines.push("", "## 三、图文软文", "", `### ${a.title}`, "");
+  if (a.altTitles?.length) lines.push(`备选标题：${a.altTitles.join(" / ")}`, "");
+  if (a.coverText) lines.push(`封面字：${a.coverText.replace(/\n/g, " / ")}`, "");
   if (a.lead) lines.push(`> ${a.lead}`, "");
   for (const b of a.blocks) {
     if (b.type === "paragraph") {
       if (b.heading) lines.push(`**${b.heading}**`, "");
       lines.push(b.text, "");
+      if (b.notes?.length) lines.push(`> ${b.notes.join("；")}`, "");
     } else lines.push(`[图片：${b.caption}]`, "");
   }
   lines.push(a.callToAction, "");

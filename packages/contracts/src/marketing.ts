@@ -267,6 +267,8 @@ export type CampaignProgress = z.infer<typeof CampaignProgressSchema>;
 export const AssistPackageSchema = z.object({
   platform: PlatformSchema,
   title: z.string(),
+  /** 封面大字（小红书）：前端据此生成带字的封面图。 */
+  coverText: z.string().optional(),
   text: z.string(),
   tags: z.array(z.string()),
   images: z.array(z.object({ imageId: IdSchema, url: z.string(), caption: z.string() })),

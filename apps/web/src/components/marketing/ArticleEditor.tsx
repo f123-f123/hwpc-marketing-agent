@@ -26,6 +26,17 @@ export function ArticleEditor({ article, busy, onSave, onCancel }: {
     >
       <p className="muted small">参数类数字请保持原样；新增的参数如果资料里没有，保存时会被核验删除。门店地址和活动来自“门店资料”，不必在这里改。</p>
       <label className="field"><span>标题</span><input className="input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required /></label>
+      {(article.altTitles?.length ?? 0) > 0 && (
+        <div className="editor-alts">
+          <span className="muted small">备选标题，点一下换用：</span>
+          {article.altTitles!.map((t) => (
+            <button key={t} type="button" className="chip" aria-pressed={draft.title === t} onClick={() => setDraft({ ...draft, title: t })}>{t}</button>
+          ))}
+        </div>
+      )}
+      {(article.platform === "xiaohongshu" || draft.coverText !== undefined) && (
+        <label className="field"><span>封面大字（换行分成两行，不写参数）</span><textarea className="textarea" rows={2} value={draft.coverText ?? ""} onChange={(e) => setDraft({ ...draft, coverText: e.target.value || undefined })} /></label>
+      )}
       {draft.lead !== undefined && <label className="field"><span>导语 / 副标题</span><textarea className="textarea" rows={2} value={draft.lead} onChange={(e) => setDraft({ ...draft, lead: e.target.value })} /></label>}
       {draft.blocks.map((b, i) =>
         b.type === "paragraph" ? (

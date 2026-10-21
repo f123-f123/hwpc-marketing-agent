@@ -7,6 +7,11 @@ export const ParagraphBlockSchema = z.object({
   text: z.string().min(1),
   /** 本段所依据的事实。含产品事实的段落必须绑定；纯引导/过渡语可为空。 */
   factIds: z.array(IdSchema).default([]),
+  /**
+   * 本段所用事实的限制条件（资料原文），紧跟在本段之后以小字展示，不塞进句子中间。
+   * 同一条限制条件在全文只出现一次（首次引用处）。
+   */
+  notes: z.array(z.string()).optional(),
 });
 
 export const ImageBlockSchema = z.object({
@@ -25,6 +30,10 @@ export type ArticleBlock = z.infer<typeof ArticleBlockSchema>;
 export const ArticleSchema = z.object({
   platform: PlatformSchema,
   title: z.string().min(1),
+  /** 备选标题（导购可以换用）。 */
+  altTitles: z.array(z.string()).optional(),
+  /** 封面大字：小红书首图、门店海报上叠加的短句，可含换行。 */
+  coverText: z.string().optional(),
   lead: z.string().optional(),
   blocks: z.array(ArticleBlockSchema).min(1),
   callToAction: z.string().min(1),

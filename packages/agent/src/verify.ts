@@ -19,6 +19,10 @@ import { norm } from "./util.js";
 
 export const MAX_REPAIR_ROUNDS = 2;
 const QUANTIFIERS = ["约", "最长", "最高", "最大", "最多", "至少", "最低", "起", "左右", "以上", "以内", "仅", "只"];
+/** 这几个量词只在数字后面才算量词（“5999 起”“10 小时以上”）；“一起用”“以上这些”不算。 */
+const AFTER_NUMBER = new Set(["起", "左右", "以上", "以内"]);
+const usesQuantifier = (sen: string, q: string) =>
+  AFTER_NUMBER.has(q) ? new RegExp(String.raw`\d[\d.,]*\s*[A-Za-z%\u4e00-\u9fa5]{0,4}\s*` + q, "u").test(sen) : sen.includes(q);
 const NUM_RE = /\d+(?:\.\d+)?/g;
 
 const sentences = (t: string): string[] => t.split(/(?<=[。！!？?；;\n])/).filter((x) => x.trim().length);
@@ -102,7 +106,7 @@ function ctxOf(scope: VerifyScope, pack: MaterialPack): Ctx {
 }
 
 /** 对一段带事实绑定的文字核验。被文章段落、互动展示文字、标题/导语共用。 */
-export function checkText(ctx: Ctx, text: string, factIds: string[], where: { blockIndex?: number; label: string }): Issue[] {
+export function checkText(ctx: Ctx, text: string, factIds: string[], where: { blockIndex?: number; label: string; qualifierScope?: string }): Issue[] {
   const issues: Issue[] = [];
   const bound = factIds.map((id) => ctx.facts.get(id)).filter((f): f is FactRecord => Boolean(f));
   const base = { blockIndex: where.blockIndex, factIds, imageIds: [] as string[] };
@@ -152,7 +156,7 @@ export function checkText(ctx: Ctx, text: string, factIds: string[], where: { bl
         if (sen.includes(q) && !supportAll.includes(q) && nums.length) push({ kind: "fact", severity: "major", code: "quantifier_added", message: `${where.label}加入了原文没有的限定词「${q}」`, excerpt: sen.trim(), fix: { type: "remove_sentence", sentence: sen } });
         continue;
       }
-      if (sen.includes(q) && !supportAll.includes(q)) {
+      if (usesQuantifier(sen, q) && !supportAll.includes(q)) {
         push({ kind: "fact", severity: "blocker", code: "quantifier_added", message: `${where.label}使用了原文没有的量词「${q}」，可能夸大或改变含义`, excerpt: sen.trim(), fix: { type: "remove_sentence", sentence: sen } });
       }
     }
@@ -221,7 +225,7 @@ export function checkText(ctx: Ctx, text: string, factIds: string[], where: { bl
   // 限制条件必须带入正文
   for (const f of bound) {
     for (const q of f.qualifiers) {
-      if (coverage(q, text) < 0.6) {
+      if (coverage(q, where.qualifierScope ?? text) < 0.6) {
         push({ kind: "fact", severity: "major", code: "qualifier_missing", message: `${where.label}引用「${f.field}」时没有带上限制条件「${q}」`, factIds: [f.factId], fix: { type: "append_qualifier", text: q } });
       }
     }
@@ -280,16 +284,22 @@ export function collectIssues(inp: VerifyInput): Issue[] {
   // 标题、导语、行动引导
   for (const [label, text] of [
     ["标题", a.title],
+    ["封面字", a.coverText ?? ""],
+    ...(a.altTitles ?? []).map((t, i) => [`备选标题${i + 1}`, t] as const),
     ["导语", a.lead ?? ""],
     ["行动引导", a.callToAction],
   ] as const) {
     if (!text) continue;
     for (const i of checkText(ctx, text, [], { label })) issues.push({ ...i, blockIndex: undefined, fix: i.fix && { type: "use_verbatim" } });
   }
+  // 限制条件以段落注释（notes）的形式出现；同一条在全文首次引用处注明一次，之后的段落算作已注明。
+  const notedBefore: string[] = [];
   a.blocks.forEach((b, idx) => {
     if (b.type === "paragraph") {
+      const qualifierScope = [b.text, ...(b.notes ?? []), ...notedBefore].join("\n");
+      notedBefore.push(...(b.notes ?? []));
       const heading = b.heading ? checkText(ctx, b.heading, b.factIds, { blockIndex: idx, label: `第 ${idx + 1} 块小标题` }).filter((x) => x.code !== "qualifier_missing") : [];
-      issues.push(...heading, ...checkText(ctx, b.text, b.factIds, { blockIndex: idx, label: `第 ${idx + 1} 段` }));
+      issues.push(...heading, ...checkText(ctx, b.text, b.factIds, { blockIndex: idx, label: `第 ${idx + 1} 段`, qualifierScope }));
       const notAllowed = b.factIds.filter((id) => !inp.allowedFactIds.includes(id));
       if (notAllowed.length) issues.push({ kind: "fact", severity: "major", code: "not_in_confirmed_direction", message: `第 ${idx + 1} 段使用了确认摘要之外的事实 ${notAllowed.join("、")}`, blockIndex: idx, factIds: notAllowed, imageIds: [], fix: { type: "drop_block" } });
     } else issues.push(...checkImage(ctx, b, idx));
@@ -317,7 +327,8 @@ export function collectIssues(inp: VerifyInput): Issue[] {
 function applyFixes(article: Article, issues: Issue[], pack: MaterialPack): { article: Article; applied: Map<Issue, "removed" | "rewritten"> } {
   const applied = new Map<Issue, "removed" | "rewritten">();
   const blocks: (ArticleBlock | null)[] = article.blocks.map((b) => ({ ...b }));
-  let { title, lead, callToAction } = article;
+  let { title, lead, callToAction, coverText } = article;
+  let altTitles = article.altTitles;
   for (const i of issues) {
     if (!i.fix) continue;
     const idx = i.blockIndex;
@@ -326,6 +337,11 @@ function applyFixes(article: Article, issues: Issue[], pack: MaterialPack): { ar
         const strip = (t: string | undefined, sen: string) => (t ? t.replace(sen, "").trim() : t);
         const sen = i.fix.type === "remove_sentence" ? i.fix.sentence : (i.excerpt ?? "");
         if (i.message.startsWith("标题")) title = strip(title, sen) || "了解这款产品";
+        else if (i.message.startsWith("封面字")) coverText = strip(coverText, sen) || undefined;
+        else if (i.message.startsWith("备选标题")) {
+          const n = Number(/^备选标题(\d+)/.exec(i.message)?.[1]) - 1;
+          altTitles = altTitles?.filter((_, k) => k !== n);
+        }
         else if (i.message.startsWith("导语")) lead = strip(lead, sen) || undefined;
         else if (i.message.startsWith("行动引导")) callToAction = strip(callToAction, sen) || "欢迎到店咨询，具体信息以门店资料为准。";
         applied.set(i, "removed");
@@ -352,8 +368,8 @@ function applyFixes(article: Article, issues: Issue[], pack: MaterialPack): { ar
         }
         break;
       case "append_qualifier":
-        if (b.type === "paragraph" && coverage(i.fix.text, b.text) < 0.6) {
-          b.text = `${b.text.replace(/[。！!]*$/, "")}（${i.fix.text}）。`;
+        if (b.type === "paragraph" && coverage(i.fix.text, [b.text, ...(b.notes ?? [])].join("\n")) < 0.6) {
+          b.notes = [...(b.notes ?? []), i.fix.text];
           applied.set(i, "rewritten");
         }
         break;
@@ -361,7 +377,8 @@ function applyFixes(article: Article, issues: Issue[], pack: MaterialPack): { ar
         if (b.type === "paragraph") {
           const f = i.factIds.map((id) => pack.facts.find((x) => x.factId === id)).find(Boolean);
           if (f) {
-            b.text = `${f.field}：${f.value}${f.qualifiers.length ? `（${f.qualifiers.join("；")}）` : ""}。`;
+            b.text = `${f.field}：${f.value}。`;
+            if (f.qualifiers.length) b.notes = [...new Set([...(b.notes ?? []), ...f.qualifiers])];
             applied.set(i, "rewritten");
           }
         }
@@ -375,7 +392,12 @@ function applyFixes(article: Article, issues: Issue[], pack: MaterialPack): { ar
         break;
     }
   }
-  return { article: { ...article, title, lead, callToAction, blocks: blocks.filter((b): b is ArticleBlock => b !== null) }, applied };
+  const fixed: Article = { ...article, title, lead, callToAction, blocks: blocks.filter((b): b is ArticleBlock => b !== null) };
+  if (coverText) fixed.coverText = coverText;
+  else delete fixed.coverText;
+  if (altTitles?.length) fixed.altTitles = altTitles;
+  else delete fixed.altTitles;
+  return { article: fixed, applied };
 }
 
 export interface VerifyOutcome {

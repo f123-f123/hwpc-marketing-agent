@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { PLATFORM_NAME, type AssistPackage } from "@hwpc/contracts";
-import { copyText, downloadUrl, isMobile } from "../../lib/share";
+import { copyText, downloadBlob, downloadUrl, isMobile } from "../../lib/share";
 import { Alert, Icon } from "../ui";
+import { CoverText, renderXhsCover } from "./Previews";
 
 /**
  * 辅助发布：平台没有开放发布接口（或未绑定）时，三步完成发布，再回填链接。
@@ -30,6 +31,17 @@ export function AssistSheet({ pkg, message, busy, onReceipt, onClose }: {
     const ok = await copyText(what === "text" ? pkg.text : pkg.title);
     if (ok) setCopied(what);
     else setError("浏览器不允许自动复制，请长按下方文字手动复制");
+  };
+
+  const [coverSaved, setCoverSaved] = useState(false);
+  const saveCover = async () => {
+    setError("");
+    try {
+      downloadBlob(await renderXhsCover(pkg.images[0]?.url, pkg.coverText ?? pkg.title), "小红书封面.png");
+      setCoverSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "封面生成失败");
+    }
   };
 
   const saveAll = async () => {
@@ -65,6 +77,19 @@ export function AssistSheet({ pkg, message, busy, onReceipt, onClose }: {
             <button type="button" className="btn btn-sm btn-primary" onClick={() => void copy("text")}>{copied === "text" ? <><Icon name="check" />已复制正文</> : "复制正文"}</button>
           </div>
         </li>
+        {pkg.platform === "xiaohongshu" && pkg.coverText && (
+          <li>
+            <div>
+              <strong>保存封面图（已加封面字）</strong>
+              <p className="muted small">首图铺满、封面字压在左下角，作为第一张图上传。</p>
+              <div className="assist-cover">
+                {pkg.images[0] && <img src={pkg.images[0].url} alt="" />}
+                <CoverText text={pkg.coverText} />
+              </div>
+            </div>
+            <button type="button" className="btn btn-sm" onClick={() => void saveCover()}>{coverSaved ? <><Icon name="check" />已保存</> : "保存封面"}</button>
+          </li>
+        )}
         {pkg.images.length > 0 && (
           <li>
             <div>

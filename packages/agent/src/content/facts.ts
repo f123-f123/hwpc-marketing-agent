@@ -82,9 +82,11 @@ export interface FillResult {
   factIds: string[];
   /** 引用了不存在的占位符的句子（已删除）。 */
   dropped: string[];
+  /** 本段所用事实的限制条件（资料原文，去重），由调用方放进段落的 notes。 */
+  qualifiers: string[];
 }
 
-/** 段落填充：替换占位符；引用未知编号的整句删除；所用事实的限制条件在段末统一注明一次。 */
+/** 段落填充：替换占位符；引用未知编号的整句删除；所用事实的限制条件单独返回，不塞进句子。 */
 export function fillParagraph(text: string, facts: Map<string, FactRecord>): FillResult {
   const factIds: string[] = [];
   const dropped: string[] = [];
@@ -106,10 +108,7 @@ export function fillParagraph(text: string, facts: Map<string, FactRecord>): Fil
   }
   const used = factIds.map((id) => [...facts.values()].find((f) => f.factId === id)!);
   const qualifiers = [...new Set(used.flatMap((f) => f.qualifiers))];
-  let out = kept.join("").trim();
-  // 列表式段落（每行一条）把限制条件单独放一行；普通段落接在句末。
-  if (qualifiers.length) out += out.includes("\n") ? `\n（${qualifiers.join("；")}）` : `（${qualifiers.join("；")}）`;
-  return { text: out, factIds, dropped };
+  return { text: kept.join("").trim(), factIds, dropped, qualifiers };
 }
 
 /** 标题、导语、行动引导不绑定事实：出现占位符就去掉，不让参数进入这些位置。 */
@@ -127,6 +126,10 @@ export interface RawBlock {
 
 export interface RawArticle {
   title: string;
+  /** 模型给的标题备选（含 title 本身时会去重）。 */
+  titleOptions?: string[];
+  /** 封面大字：小红书首图、门店海报叠加的短句。 */
+  coverText?: string;
   lead?: string;
   blocks: RawBlock[];
   callToAction: string;
@@ -140,6 +143,8 @@ export function materialize(raw: RawArticle, platform: Article["platform"], fact
   const dropped: string[] = [];
   const blocks: ArticleBlock[] = [];
   const usedImages = new Set<string>();
+  // 同一条限制条件全文只注明一次：放在第一次引用它的段落下面
+  const noted = new Set<string>();
   for (const b of raw.blocks) {
     if (b.type === "image") {
       const img = b.image ? imageMap.get(b.image.trim()) : undefined;
@@ -152,12 +157,19 @@ export function materialize(raw: RawArticle, platform: Article["platform"], fact
     const r = fillParagraph(b.text, factMap);
     dropped.push(...r.dropped);
     if (!r.text) continue;
-    blocks.push({ type: "paragraph", ...(b.heading ? { heading: stripPlaceholders(b.heading) } : {}), text: r.text, factIds: r.factIds });
+    const notes = r.qualifiers.filter((q) => !noted.has(q));
+    notes.forEach((q) => noted.add(q));
+    blocks.push({ type: "paragraph", ...(b.heading ? { heading: stripPlaceholders(b.heading) } : {}), text: r.text, factIds: r.factIds, ...(notes.length ? { notes } : {}) });
   }
+  const title = stripPlaceholders(raw.title);
+  const altTitles = [...new Set((raw.titleOptions ?? []).map(stripPlaceholders).filter((t) => t && t !== title))].slice(0, 3);
+  const coverText = raw.coverText ? stripPlaceholders(raw.coverText) : "";
   return {
     article: {
       platform,
-      title: stripPlaceholders(raw.title),
+      title,
+      ...(altTitles.length ? { altTitles } : {}),
+      ...(coverText ? { coverText } : {}),
       ...(raw.lead ? { lead: stripPlaceholders(raw.lead) } : {}),
       blocks,
       callToAction: stripPlaceholders(raw.callToAction),

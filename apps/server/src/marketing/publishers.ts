@@ -35,7 +35,13 @@ export interface ImageSource {
 
 /* ------------------------------ 文本整理 ------------------------------ */
 
-const paragraphs = (a: Article) => a.blocks.flatMap((b) => (b.type === "paragraph" ? [b.heading ? `${b.heading}\n${b.text}` : b.text] : []));
+/** 段落连同它的限制条件注释（紧跟在段落后面，和页面展示一致）。 */
+const paragraphs = (a: Article) =>
+  a.blocks.flatMap((b) => {
+    if (b.type !== "paragraph") return [];
+    const body = b.heading ? `${b.heading}\n${b.text}` : b.text;
+    return [b.notes?.length ? `${body}\n（${b.notes.join("；")}）` : body];
+  });
 const imagesOf = (a: Article) => a.blocks.flatMap((b) => (b.type === "image" ? [b] : []));
 
 /** 打开平台的链接。App 深链在不同系统 / 版本上可能失效，前端会同时给出网页入口。 */
@@ -60,6 +66,7 @@ export function assistPackage(platform: Platform, article: Article, images: Imag
   return {
     platform,
     title: platform === "xiaohongshu" ? [...article.title].slice(0, 20).join("") : article.title,
+    ...(article.coverText ? { coverText: article.coverText } : {}),
     text: lines.filter(Boolean).join("\n\n"),
     tags: article.tags,
     images: images.filter((i) => used.has(i.imageId)).map((i) => ({ imageId: i.imageId, url: i.url, caption: i.caption })),
@@ -156,6 +163,7 @@ export function wechatHtml(article: Article, imageUrls: Map<string, string>): st
     if (b.type === "paragraph") {
       if (b.heading) out.push(`<h3 style="font-size:17px;margin:24px 0 8px;">${esc(b.heading)}</h3>`);
       out.push(`<p style="line-height:1.8;">${esc(b.text)}</p>`);
+      if (b.notes?.length) out.push(`<p style="line-height:1.6;color:#8a8f98;font-size:13px;">${esc(b.notes.join("；"))}</p>`);
     } else {
       const url = imageUrls.get(b.imageId);
       if (url) out.push(`<p style="text-align:center;"><img src="${esc(url)}" /></p><p style="text-align:center;color:#888;font-size:13px;">${esc(b.caption)}</p>`);

@@ -91,6 +91,12 @@
   --atmo-glass-shadow: 0 8px 30px rgb(20 24 31 / 7%);
   --atmo-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
+  /* 平台预览（marketing.css）：模拟各平台自身的界面色，只用在预览里 */
+  --pv-xhs-red: #ff2442;
+  --pv-wx-link: #576b95;
+  --pv-tag: #13386c;
+  --pv-highlight: #ffe14d;
+
   /* 沉浸式体验页（page.css）：深色开场 + 浅色正文 */
   --ip-dark: #0a0b0d;
   --ip-dark-fg: #f5f6f8;

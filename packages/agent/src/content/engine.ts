@@ -11,7 +11,8 @@ import { topicsIn } from "../lexicon.js";
 import { PLATFORM_PLANS } from "../strategy.js";
 import { verifyAndRepair, type VerifyScope } from "../verify.js";
 import { pickAngles, type Angle } from "./angles.js";
-import { aliasImages, materialize, selectFacts, shortModel, type FactAlias, type ImageAlias, type RawArticle } from "./facts.js";
+import { aliasImages, materialize, selectFacts, type RawArticle } from "./facts.js";
+import { templateRaw } from "./template.js";
 import { systemPrompt, userPrompt } from "./prompt.js";
 import { articleText, findCliches, maxSimilarity, SIMILARITY_LIMIT } from "./style.js";
 
@@ -51,91 +52,31 @@ const RawBlockSchema = z.object({
   image: z.string().optional(),
   caption: z.string().optional(),
 });
-const RawArticleSchema = z.object({
-  title: z.string().min(1),
-  lead: z.string().optional(),
-  blocks: z.array(RawBlockSchema).min(1),
-  callToAction: z.string().default(""),
-  tags: z.array(z.string()).default([]),
-});
+const RawArticleSchema = z
+  .object({
+    title: z.string().optional(),
+    titleOptions: z.array(z.string()).max(6).optional(),
+    coverText: z.string().optional(),
+    lead: z.string().optional(),
+    blocks: z.array(RawBlockSchema).min(1),
+    callToAction: z.string().default(""),
+    tags: z.array(z.string()).default([]),
+  })
+  .refine((r) => Boolean(r.title?.trim() || r.titleOptions?.some((t) => t.trim())), { message: "缺少标题" });
 
-/** 从模型输出里取出 JSON（容忍 ```json 围栏和前后说明文字）。 */
+/** 从模型输出里取出 JSON（容忍 ```json 围栏和前后说明文字）。只给了标题备选时，取第一个作标题。 */
 export function parseModelJson(text: string): RawArticle {
   const cleaned = text.replace(/```(?:json)?/gi, "");
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("模型没有返回 JSON");
-  return RawArticleSchema.parse(JSON.parse(cleaned.slice(start, end + 1)));
+  const r = RawArticleSchema.parse(JSON.parse(cleaned.slice(start, end + 1)));
+  const options = (r.titleOptions ?? []).map((t) => t.trim()).filter(Boolean);
+  const { title: rawTitle, ...rest } = r;
+  return { ...rest, title: rawTitle?.trim() || options[0]!, titleOptions: options };
 }
 
-const short = (field: string) => field.split("·").pop() ?? field;
-
-/** 模板稿的开头：每个角度一句，至少让不同版本从不同处境说起。 */
-const OPENERS: Record<string, string> = {
-  day: "从早上出门到晚上收尾，一台电脑要陪你过完一整天。",
-  campus: "宿舍、教室、图书馆来回跑，电脑每天都得背着走。",
-  parents: "替家人挑电脑，先看清楚这几项，再到店里亲手试。",
-  trip: "出差一周，路上、酒店、会议室，最在意的就是这几件事。",
-  create: "写方案、修图、剪片子之前，可以先对照这几项资料。",
-  devices: "手机和电脑一起用，先弄清楚这几点。",
-  qa: "店里最常被问到的几个问题，按资料回答。",
-  detail: "这次只挑几个细节说清楚。",
-  checklist: "来店里可以亲手试的几件事：",
-};
-
-/** 模板稿：同样走占位符与核验，只是写法固定。界面会标注“模板稿”。index 让三个版本用不同的事实与配图。 */
-export function templateRaw(platform: Platform, inp: { angle: Angle; index: number; theme: string; audience: string; store: StoreProfile; productName: string; facts: FactAlias[]; images: ImageAlias[] }): RawArticle {
-  const n = platform === "store_moments" ? 2 : 3;
-  const rotated = [...inp.facts.slice(inp.index), ...inp.facts.slice(0, inp.index)];
-  const f = rotated.slice(0, n);
-  const pic = inp.images.length ? inp.images[inp.index % inp.images.length] : undefined;
-  const imageBlock = pic ? [{ type: "image" as const, image: pic.alias, caption: pic.image.description }] : [];
-  const list = f.map((x) => `· ${short(x.fact.field)}：{{${x.alias}}}`).join("\n");
-  const opener = OPENERS[inp.angle.id] ?? inp.theme;
-  const visit = `想亲手试试，可以来${inp.store.name}，样机都能上手。`;
-  const product = shortModel(inp.productName, 16);
-  switch (platform) {
-    case "wechat_article":
-      return {
-        title: `${inp.audience}挑电脑：${inp.angle.label}`,
-        lead: `${inp.theme}。${opener}`,
-        blocks: [
-          ...imageBlock,
-          { type: "paragraph", heading: `${product} 资料里写明的几项`, text: list },
-          { type: "paragraph", heading: "需要到店确认的", text: "具体配置、销售版本和软件兼容性，请以门店实际销售版本为准。" },
-        ],
-        callToAction: visit,
-        tags: [],
-      };
-    case "xiaohongshu":
-      return {
-        title: `${inp.angle.label}｜${shortModel(inp.productName, Math.max(4, 19 - [...inp.angle.label].length))}`,
-        blocks: [
-          ...imageBlock,
-          { type: "paragraph", text: `${opener}${inp.theme}。` },
-          { type: "paragraph", text: list },
-          { type: "paragraph", text: "你最在意哪一点？评论区说说，我们按你的情况帮你看。" },
-        ],
-        callToAction: visit,
-        tags: [shortModel(inp.productName, 20), inp.audience, inp.angle.label].map((t) => t.replace(/\s+/g, "")).filter(Boolean),
-      };
-    case "store_moments":
-      return {
-        title: opener,
-        blocks: [{ type: "paragraph", text: `${inp.theme}。${f.map((x) => `${short(x.fact.field)}{{${x.alias}}}`).join("，")}。` }, ...imageBlock],
-        callToAction: visit,
-        tags: [],
-      };
-    case "store_poster":
-      return {
-        title: shortModel(inp.productName, 12),
-        lead: [...inp.theme].slice(0, 20).join(""),
-        blocks: [...imageBlock, { type: "paragraph", text: f.map((x) => `${short(x.fact.field)} {{${x.alias}}}`).join("\n") }],
-        callToAction: "到店亲手体验",
-        tags: [],
-      };
-  }
-}
+export { templateRaw } from "./template.js";
 
 function lengthOf(a: Article): number {
   return a.blocks.reduce((n, b) => n + (b.type === "paragraph" ? b.text.length + (b.heading?.length ?? 0) : 0), (a.lead ?? "").length);
@@ -160,8 +101,10 @@ function styleFindings(article: Article, platform: Platform, similarity: number,
 
 async function writeOne(inp: PostEngineInput, angle: Angle, index: number): Promise<GeneratedVariant> {
   const topics = [...new Set([...angle.topics, ...topicsIn(`${inp.campaign.theme} ${inp.campaign.audience}`)])];
-  const facts = selectFacts(inp.pack.facts.filter((f) => inp.campaign.productIds.includes(f.productId)), topics);
-  const images = aliasImages(inp.pack.images.filter((i) => inp.campaign.productIds.includes(i.productId)), PLATFORM_PLANS[inp.platform].imageCount.max + 2);
+  // 推广任务不指定具体配置：只用适用于全部配置的事实与图片（配置专属的写进去也会被核验删掉，还会带走封面图）
+  const forAll = <T extends { productId: string; configurationIds: string[] }>(x: T) => inp.campaign.productIds.includes(x.productId) && x.configurationIds.length === 0;
+  const facts = selectFacts(inp.pack.facts.filter(forAll), topics);
+  const images = aliasImages(inp.pack.images.filter(forAll), PLATFORM_PLANS[inp.platform].imageCount.max + 2);
   const productNames = inp.pack.products.filter((p) => inp.campaign.productIds.includes(p.productId)).map((p) => p.model);
 
   let raw: RawArticle | undefined;

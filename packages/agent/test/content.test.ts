@@ -3,6 +3,7 @@ import type { MaterialPack, ModelService, StoreProfile } from "@hwpc/contracts";
 import { createMockDataService } from "@hwpc/fixtures";
 import { generatePostVariants, parseModelJson, pickAngles, similarity, verifyAndRepair, type PostEngineInput } from "../src/index.js";
 import { selectFacts, shortModel } from "../src/content/facts.js";
+import { systemPrompt } from "../src/content/prompt.js";
 
 const store: StoreProfile = {
   storeId: "s1",
@@ -60,12 +61,16 @@ function input(over: Partial<PostEngineInput> & { pack: MaterialPack }): PostEng
 }
 
 describe("门店推文引擎", () => {
-  it("事实按原文逐字填入并带上限制条件；模型自编的参数被删除；未知编号整句删除", async () => {
+  it("事实按原文逐字填入，限制条件放在段落注释里；模型自编的参数被删除；未知编号整句删除", async () => {
     const [v] = await generatePostVariants(input({ pack: await pack(), model: fakeModel(), count: 1 }));
     expect(v!.mode).toBe("model");
-    const body = v!.article.blocks.filter((b) => b.type === "paragraph").map((b) => (b.type === "paragraph" ? b.text : "")).join("\n");
+    const paras = v!.article.blocks.filter((b) => b.type === "paragraph");
+    const body = paras.map((b) => (b.type === "paragraph" ? b.text : "")).join("\n");
     expect(body).toContain("视频播放最长 10 小时（虚构）");
-    expect(body).toContain("实验室数据，实际使用因场景而异");
+    // 限制条件不塞进句子，而是跟在引用它的段落后面
+    expect(body).not.toContain("实验室数据，实际使用因场景而异");
+    const cited = paras.find((b) => b.type === "paragraph" && b.text.includes("10 小时"));
+    expect(cited?.type === "paragraph" && cited.notes?.join("")).toContain("实验室数据，实际使用因场景而异");
     expect(body).not.toContain("0.9");
     expect(body).not.toContain("F99");
     expect(v!.report.findings.some((f) => f.excerpt?.includes("0.9"))).toBe(true);
@@ -167,5 +172,107 @@ describe("门店推文引擎", () => {
     expect(parseModelJson('说明\n```json\n{"title":"t","blocks":[{"type":"paragraph","text":"x"}]}\n```').title).toBe("t");
     expect(similarity("今天带电脑去图书馆写论文", "今天带电脑去图书馆写论文")).toBe(1);
     expect(similarity("今天带电脑去图书馆写论文", "周末在家修照片剪视频")).toBeLessThan(0.2);
+  });
+});
+
+describe("推文质量：模板稿与提示词", () => {
+  const paraText = (a: { blocks: { type: string; text?: string; heading?: string }[] }) =>
+    a.blocks.filter((b) => b.type === "paragraph").map((b) => `${b.heading ?? ""}${b.text ?? ""}`);
+
+  it("模板稿不再是参数清单：每条事实都放在“场景 + 动作”的句子里", async () => {
+    const p = await pack();
+    for (const platform of ["xiaohongshu", "wechat_article", "store_moments"] as const) {
+      const [v] = await generatePostVariants(input({ pack: p, platform, count: 1 }));
+      const texts = paraText(v!.article);
+      expect(texts.some((t) => /^·/.test(t)), platform).toBe(false);
+      for (const b of v!.article.blocks) {
+        if (b.type === "paragraph" && b.factIds.length) expect(b.text, platform).toMatch(/：/);
+      }
+    }
+  });
+
+  it("同一条限制条件全文只注明一次", async () => {
+    const [v] = await generatePostVariants(input({ pack: await pack(), platform: "wechat_article", count: 1 }));
+    const notes = v!.article.blocks.flatMap((b) => (b.type === "paragraph" ? b.notes ?? [] : []));
+    expect(new Set(notes).size).toBe(notes.length);
+  });
+
+  it("小红书：有封面大字、编号要点、5–8 个话题；首图在最前", async () => {
+    const vs = await generatePostVariants(input({ pack: await pack(), platform: "xiaohongshu" }));
+    for (const v of vs) {
+      const a = v.article;
+      expect(a.coverText).toBeTruthy();
+      expect([...a.title].length).toBeLessThanOrEqual(20);
+      expect(a.blocks[0]!.type).toBe("image");
+      expect(a.blocks.some((b) => b.type === "paragraph" && /^[①②③]/.test(b.heading ?? ""))).toBe(true);
+      expect(a.tags.length).toBeGreaterThanOrEqual(5);
+      expect(a.tags.length).toBeLessThanOrEqual(8);
+    }
+    // 三个版本的封面字各不相同
+    expect(new Set(vs.map((v) => v.article.coverText)).size).toBe(3);
+  });
+
+  it("公众号：小标题是读者的问题；朋友圈：短；海报：三行短卖点", async () => {
+    const p = await pack();
+    const [wx] = await generatePostVariants(input({ pack: p, platform: "wechat_article", count: 1 }));
+    const headings = wx!.article.blocks.flatMap((b) => (b.type === "paragraph" && b.heading ? [b.heading] : []));
+    expect(headings.filter((h) => /？$/.test(h)).length).toBeGreaterThanOrEqual(2);
+    const [mo] = await generatePostVariants(input({ pack: p, platform: "store_moments", count: 1 }));
+    expect([mo!.article.title, ...paraText(mo!.article)].join("").length).toBeLessThanOrEqual(160);
+    const [po] = await generatePostVariants(input({ pack: p, platform: "store_poster", count: 1 }));
+    const lines = paraText(po!.article).join("\n").split("\n").filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.every((l) => [...l].length <= 18)).toBe(true);
+    expect([...po!.article.title].length).toBeLessThanOrEqual(12);
+  });
+
+  it("模型给的标题备选与封面字会保留，并和正文一样经过核验", async () => {
+    const model: ModelService = {
+      getStatus: async () => ({ state: "connected", provider: "openai_compatible", message: "test" }),
+      complete: async (req) => {
+        const user = JSON.parse(req.messages.find((m) => m.role === "user")!.content) as { 可用事实: { 编号: string }[]; 可用图片: { 编号: string }[] };
+        return {
+          text: JSON.stringify({
+            titleOptions: ["下班路上的一台电脑", "通勤包里的那台", "全网最轻的通勤本"],
+            coverText: "全网最轻\n闭眼入",
+            blocks: [{ type: "image", image: user.可用图片[0]?.编号 ?? "I1", caption: "示例图" }, { type: "paragraph", text: `早上出门，放进包里：重量{{${user.可用事实[0]!.编号}}}。` }],
+            callToAction: "来店里试试",
+            tags: ["通勤"],
+          }),
+          simulated: false,
+        };
+      },
+    };
+    const [v] = await generatePostVariants(input({ pack: await pack(), model, count: 1 }));
+    expect(v!.article.title).toBe("下班路上的一台电脑");
+    expect(v!.article.altTitles).toContain("通勤包里的那台");
+    // 含绝对化用语的备选标题和封面字被核验删掉
+    expect(v!.article.altTitles ?? []).not.toContain("全网最轻的通勤本");
+    expect(v!.article.coverText ?? "").not.toContain("最轻");
+  });
+
+  it("“一起”“以上这些”不是量词；“10 小时以上”这类数字后的量词仍要有出处", async () => {
+    const p = await pack();
+    const fact = p.facts.find((f) => f.productId === "mock-air-14" && f.configurationIds.length === 0)!;
+    const article = {
+      platform: "xiaohongshu" as const,
+      title: "手机电脑一起用，先弄清三点",
+      blocks: [
+        { type: "paragraph" as const, text: `手机和电脑一起用的时候：${fact.value}。以上这些到店都能试。`, factIds: [fact.factId] },
+        { type: "paragraph" as const, text: "这台能连续用 12 小时以上。", factIds: [] },
+      ],
+      callToAction: "来店里试试",
+      tags: [],
+    };
+    const out = verifyAndRepair({ scope: { productIds: ["mock-air-14"], configurationIds: [], avoidTopics: [], noPrice: true, otherModels: [] }, pack: p, article, allowedFactIds: [fact.factId] }, new Date(0).toISOString());
+    expect(out.article.title).toBe("手机电脑一起用，先弄清三点");
+    expect(out.article.blocks.map((b) => (b.type === "paragraph" ? b.text : "")).join("")).toContain("一起用");
+    expect(out.report.findings.some((f) => f.excerpt?.includes("12 小时以上"))).toBe(true);
+  });
+
+  it("系统提示词包含知识库写作方法、正反例、自查清单和本平台的输出格式", () => {
+    const sp = systemPrompt("xiaohongshu");
+    for (const k of ["问题、做了什么动作", "写作节拍", "coverText", "titleOptions", "交稿前自查", "反例", "不要自己抄写限制条件"]) expect(sp).toContain(k);
+    expect(systemPrompt("store_poster")).toContain("不超过 12 个字");
   });
 });
