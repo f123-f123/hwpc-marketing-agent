@@ -120,7 +120,8 @@ async function writeOne(inp: PostEngineInput, angle: Angle, index: number): Prom
         json: true,
         // 多个版本稍微错开温度，进一步拉开差异；事实由占位符填充，不受温度影响。
         temperature: Math.min(1.3, inp.temperature + index * 0.1),
-        maxTokens: 2200,
+        // 推理模型的思考过程也计入输出上限；上限太低会把 JSON 截断，整版退回模板稿。
+        maxTokens: 8000,
       });
       raw = parseModelJson(res.text);
       mode = "model";

@@ -49,7 +49,8 @@ export async function rewriteReply(model: ModelService, material: Record<string,
       ],
       json: true,
       temperature: 0.4,
-      maxTokens: 700,
+      // 推理模型的思考过程也计入输出上限，留足余量，否则回复被截断后只能退回规则版。
+      maxTokens: 3000,
       signal,
     });
     if (res.simulated) return { text: fallback, used: false, error: "模型为模拟模式" };
@@ -73,7 +74,7 @@ const ExtractSchema = z.object({
 /** 模型补充抽取；只保留 quote 出自原话、且规则没有覆盖到的维度。 */
 export async function extractWithModel(model: ModelService, text: string, ruleEdits: NeedEdit[], signal?: AbortSignal): Promise<NeedEdit[]> {
   try {
-    const res = await model.complete({ messages: [{ role: "system", content: EXTRACT_SYSTEM }, { role: "user", content: text }], json: true, temperature: 0, maxTokens: 500, signal });
+    const res = await model.complete({ messages: [{ role: "system", content: EXTRACT_SYSTEM }, { role: "user", content: text }], json: true, temperature: 0, maxTokens: 2000, signal });
     if (res.simulated) return [];
     const parsed = ExtractSchema.parse(jsonOf(res.text));
     const covered = new Set(ruleEdits.flatMap((e) => (e.op === "set" ? [e.key] : [])));
@@ -96,7 +97,7 @@ const QA_SYSTEM = `你是华为门店的答疑助手。顾客在看一份为他�
 export async function rewriteAnswer(model: ModelService, material: Record<string, unknown>, fallback: string, signal?: AbortSignal) {
   const payload = JSON.stringify(material);
   try {
-    const res = await model.complete({ messages: [{ role: "system", content: QA_SYSTEM }, { role: "user", content: payload }], json: true, temperature: 0.3, maxTokens: 800, signal });
+    const res = await model.complete({ messages: [{ role: "system", content: QA_SYSTEM }, { role: "user", content: payload }], json: true, temperature: 0.3, maxTokens: 3000, signal });
     if (res.simulated) return { text: fallback, used: false };
     const reply = z.object({ reply: z.string().min(2).max(1200) }).parse(jsonOf(res.text)).reply.trim();
     if (!numbersGrounded(reply, payload) || FORBIDDEN.test(reply)) return { text: fallback, used: false };

@@ -112,7 +112,8 @@
 .ip-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-5); margin: var(--space-7) 0 0; padding: var(--space-5) 0; border-block: 1px solid var(--color-border); }
 .ip-figures div { display: flex; flex-direction: column; min-width: 0; }
 /* 数值不在中间断行（“14 英 / 寸”），字号随宽度收一点 */
-.ip-figures dd { margin: 0; color: var(--color-primary); font-size: var(--text-figure); font-weight: 700; line-height: 1.1; white-space: nowrap; }
+.ip-figures dd { margin: 0; color: var(--color-primary); font-size: var(--text-figure); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
+.ip-figures dd.is-long { font-size: var(--text-3xl); line-height: 1.25; }
 .ip-figures dt { margin-top: var(--space-2); color: var(--color-muted-fg); font-size: var(--text-sm); }
 .ip-qualifiers { margin-top: var(--space-3); color: var(--color-muted-fg); font-size: var(--text-xs); }
 .ip-points { margin-top: var(--space-7); }

@@ -29,7 +29,10 @@ export function Home({ busy, status, statusError, onRetryStatus, onCreate }: {
     if (t && !busy) void onCreate(t);
   };
 
-  const modelReal = status ? status.model.state === "connected" && status.model.provider !== "mock" : false;
+  // 顾问引擎：模拟模式用规则模拟；否则是知识库引擎，模型只负责润色回复，未配置时按规则回复。
+  const advisorMock = status?.activeDataOrigin === "mock";
+  const MODEL_NOTE: Record<string, string> = { connected: "模型润色", unverified: "已配置模型", error: "模型调用失败，按规则回复", not_configured: "规则回复，未接模型" };
+  const advisorLabel = !status ? "检查中…" : advisorMock ? "规则模拟（模拟数据）" : `知识库顾问（${MODEL_NOTE[status.model.state] ?? status.model.state}）`;
 
   return (
     <main className="home atmo">
@@ -102,7 +105,7 @@ export function Home({ busy, status, statusError, onRetryStatus, onCreate }: {
               <dt>资料来源</dt>
               <dd className={status?.activeDataOrigin === "mock" ? "is-warn" : undefined}>{status ? (ORIGIN_LABEL[status.activeDataOrigin] ?? status.activeDataOrigin) : "检查中…"}</dd>
               <dt>顾问</dt>
-              <dd className={status && !modelReal ? "is-warn" : undefined}>{status ? (modelReal ? "在线模型" : "规则模拟（未接入模型）") : "检查中…"}</dd>
+              <dd className={advisorMock ? "is-warn" : undefined}>{advisorLabel}</dd>
               <dt>进度保存</dt>
               <dd>保存在本机服务端，刷新可恢复</dd>
             </dl>

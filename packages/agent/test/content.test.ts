@@ -121,6 +121,15 @@ describe("门店推文引擎", () => {
     expect(next.join()).not.toBe(a.join());
   });
 
+  it("人群专属角度只给对得上的人群：大一新生不会拿到“出差一周”", () => {
+    const ids = ["store-a", "store-b", "store-c", "store-d", "store-e", "store-f"].flatMap((seed) =>
+      [0, 1, 2].flatMap((round) => pickAngles({ seed, audience: "大一新生及家长", theme: "宿舍到图书馆，一台电脑背着走", n: 3, round }).map((x) => x.id)),
+    );
+    expect(ids).not.toContain("trip");
+    expect(ids).not.toContain("create");
+    expect(ids).toContain("campus");
+  });
+
   it("解析残留与列错位的尺寸不会进入推文；有吸引力的字段排在前面", () => {
     const base = { productId: "p", configurationIds: [], qualifiers: [], reviewStatus: "verified" as const, source: { origin: "local" as const, title: "t", locator: "l" } };
     const facts = [

@@ -106,12 +106,15 @@ function hash(s: string): number {
 
 /**
  * 为某门店某任务挑选 n 个角度：先放与人群/主题匹配的，再按门店哈希轮换其余角度。
- * round 递增（重新生成）时整体后移，换一批角度。
+ * 带人群限定的角度（如“出差一周”）只在人群或主题命中时使用，避免给大一新生写“出差一周”；
+ * 可用角度不够 n 个时才放宽。round 递增（重新生成）时整体后移，换一批角度。
  */
 export function pickAngles(input: { seed: string; audience: string; theme: string; n: number; round?: number }): Angle[] {
   const text = `${input.audience} ${input.theme}`;
   const themeTopics = topicsIn(text);
-  const scored = ANGLES.map((a) => ({
+  const fitting = ANGLES.filter((a) => a.audience.source === "." || a.audience.test(text));
+  const pool = fitting.length >= input.n ? fitting : ANGLES;
+  const scored = pool.map((a) => ({
     a,
     score: (a.audience.source !== "." && a.audience.test(text) ? 2 : 0) + (a.topics.some((t) => themeTopics.includes(t)) ? 1 : 0),
     tie: hash(`${input.seed}:${a.id}`),

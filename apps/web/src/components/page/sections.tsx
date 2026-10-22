@@ -122,7 +122,7 @@ export function CandidateSection({ s, index, total }: { s: Of<"candidate">; inde
           <dl className="ip-figures" data-reveal>
             {s.highlights.map((h) => (
               <div key={`${h.label}${h.value}`}>
-                <dd>{h.value}</dd>
+                <dd className={h.value.length > 10 ? "is-long" : undefined}>{h.value}</dd>
                 <dt>{h.label}</dt>
               </div>
             ))}
