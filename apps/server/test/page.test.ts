@@ -58,7 +58,8 @@ describe("体验页生成", () => {
       if (s.kind === "candidate") {
         // 大字数字必须出自该候选的知识库事实
         const pack = await createMockDataService().getMaterialPack({ taskId: "t", product: s.product });
-        for (const h of s.highlights) expect(pack.facts.some((f) => f.factId === h.factId && f.value === h.value)).toBe(true);
+        // 大字只是把括号说明挪进标签，数值仍是原文开头的那一段
+        for (const h of s.highlights) expect(pack.facts.some((f) => f.factId === h.factId && f.value.startsWith(h.value))).toBe(true);
         if (s.intro.status === "filled") expect(s.intro.origin).toBe("template");
       }
     }
@@ -78,8 +79,10 @@ describe("体验页生成", () => {
     const imgs = after.sections.flatMap((s): ImageSlot[] => (s.kind === "candidate" || s.kind === "hero" ? [s.image] : []));
     const candImgs = after.sections.flatMap((s) => (s.kind === "candidate" ? [s.image] : []));
     expect(candImgs.every((i) => i.status === "filled" && i.image?.origin === "local")).toBe(true);
-    // 开场图没有绑定产品，这个填充器不处理，仍是占位
-    expect(imgs.find((i) => !i.product)?.status).toBe("pending");
+    // 开场图绑定首选机型，由同一个图源补上
+    const hero = after.sections.find((s) => s.kind === "hero");
+    expect(hero?.kind === "hero" && hero.image.product).toBeTruthy();
+    expect(imgs.every((i) => i.status === "filled")).toBe(true);
   });
 
   it("旧的会话记录没有 pages / qa 字段也能读出", () => {
@@ -136,5 +139,14 @@ describe("体验页侧边提问（答疑智能体）", () => {
     const { manager } = managerWith();
     const snap = await manager.create("我经常出差办公");
     await expect(manager.ask(snap.sessionId, "推荐哪一款", snap.revision)).rejects.toMatchObject({ code: "invalid_state" });
+  });
+});
+
+describe("体验页大字", () => {
+  it("括号里的说明并入标签，数值只留原文数值部分", async () => {
+    const { splitFigure } = await import("../src/page/build.js");
+    expect(splitFigure("电池·容量", "70 Wh（额定容量）")).toEqual({ value: "70 Wh", label: "电池容量（额定容量）" });
+    expect(splitFigure("尺寸与重量·重量", "约 1.33 kg（圆键盘含电池）")).toEqual({ value: "约 1.33 kg", label: "重量（圆键盘含电池）" });
+    expect(splitFigure("屏幕·尺寸", "14.2 英寸")).toEqual({ value: "14.2 英寸", label: "屏幕尺寸" });
   });
 });

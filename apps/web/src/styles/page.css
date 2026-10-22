@@ -109,9 +109,10 @@
 .ip-intro { margin-top: var(--space-6); line-height: 1.9; }
 .ip-intro.is-pending { color: var(--color-muted-fg); }
 .ip-origin { display: inline-block; margin-left: var(--space-2); color: var(--color-muted-fg); font-size: var(--text-xs); }
-.ip-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); margin: var(--space-7) 0 0; padding: var(--space-5) 0; border-block: 1px solid var(--color-border); }
+.ip-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-5); margin: var(--space-7) 0 0; padding: var(--space-5) 0; border-block: 1px solid var(--color-border); }
 .ip-figures div { display: flex; flex-direction: column; min-width: 0; }
-.ip-figures dd { margin: 0; color: var(--color-primary); font-size: var(--text-figure); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
+/* 数值不在中间断行（“14 英 / 寸”），字号随宽度收一点 */
+.ip-figures dd { margin: 0; color: var(--color-primary); font-size: var(--text-figure); font-weight: 700; line-height: 1.1; white-space: nowrap; }
 .ip-figures dt { margin-top: var(--space-2); color: var(--color-muted-fg); font-size: var(--text-sm); }
 .ip-qualifiers { margin-top: var(--space-3); color: var(--color-muted-fg); font-size: var(--text-xs); }
 .ip-points { margin-top: var(--space-7); }

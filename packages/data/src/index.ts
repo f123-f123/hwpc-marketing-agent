@@ -86,3 +86,4 @@ export function createDeviceKnowledgeService(data: DataService): DeviceKnowledge
 }
 
 export { readPlatformGuide } from "./guides.js";
+export { createLocalLibrary, tokenize } from "./library.js";

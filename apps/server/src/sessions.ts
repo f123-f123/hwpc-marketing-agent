@@ -241,6 +241,7 @@ function finishTurn(rec: SessionRecord, proposal: AdvisorProposal, userText: str
     at: t,
     needVersion: rec.needVersions.at(-1)!.version,
     ...(suggested.length ? { suggestedScenes: suggested } : {}),
+    ...(proposal.references?.length ? { references: proposal.references.slice(0, 6) } : {}),
   });
   rec.runState = { state: "idle", at: t };
   commit(deps, rec);

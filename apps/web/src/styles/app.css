@@ -121,6 +121,12 @@
 .consult-needs > div { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
 /* 对话输入在柔光上用白色磨砂，和背景拉开层次 */
 .atmo .composer, .atmo .home-composer { background: var(--atmo-glass-strong); backdrop-filter: blur(18px); box-shadow: var(--atmo-glass-shadow); }
+.consult-cands h2 { font-size: var(--text-xl); }
+.consult-cands ol { display: grid; margin-top: var(--space-2); }
+.consult-cands li { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+.consult-cand-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.consult-cand-name { font-size: var(--text-lg); font-weight: var(--weight-strong); }
+.consult-cand-reason { margin-top: var(--space-1); color: var(--color-fg-secondary); font-size: var(--text-sm); line-height: 1.7; }
 .consult-needs dt { color: var(--color-muted-fg); font-size: var(--text-sm); }
 .consult-needs dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-1) 0 0; font-size: var(--text-lg); }
 .alert ul { margin-top: var(--space-1); }
@@ -142,6 +148,13 @@
 .msg-body p { white-space: pre-line; overflow-wrap: anywhere; }
 .msg-user .msg-body { color: var(--color-fg-secondary); }
 .msg-system .msg-body { color: var(--color-muted-fg); font-size: var(--text-sm); }
+/* 知识库出处：折叠在回复下方，展开后是原文摘录 */
+.msg-refs { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--color-muted-fg); }
+.msg-refs summary { cursor: pointer; width: fit-content; }
+.msg-refs ul { display: grid; gap: var(--space-2); margin-top: var(--space-2); padding-left: var(--space-3); border-left: 2px solid var(--color-border); }
+.msg-ref-title { display: block; color: var(--color-fg-secondary); }
+.msg-ref-section { margin-right: var(--space-2); color: var(--color-primary); }
+.msg-ref-quote { display: block; margin-top: 2px; line-height: 1.7; }
 .msg-suggest { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
 .msg-typing { display: inline-flex; gap: var(--space-1); padding: var(--space-2) 0; }
 .msg-typing span { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--color-muted-fg); animation: typing 1s infinite ease-in-out; }

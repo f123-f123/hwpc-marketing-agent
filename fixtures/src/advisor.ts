@@ -198,6 +198,7 @@ function build(view: AdvisorView, edits: NeedEdit[], lead: string): AdvisorPropo
     suggestedScenes: p.some((x) => x.key === "task") && !view.excludedSceneIds.includes(MOCK_SCENE_IDS.commute)
       ? [{ sceneId: MOCK_SCENE_IDS.commute, version: 1, reason: "先看看带着电脑出行的一天是什么样（说明性，不是推荐）" }]
       : [],
+    references: [],
   };
 }
 

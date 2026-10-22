@@ -18,6 +18,8 @@ export interface ServerConfig {
   localKbDir?: string;
   ima: { clientId?: string; apiKey?: string; kbName: string };
   model: { baseUrl?: string; apiKey?: string; name?: string; timeoutMs: number };
+  /** 联网检索（可选），目前支持 tavily。 */
+  webSearch: { provider?: string; apiKey?: string; timeoutMs: number };
   auth: { secret?: string; hqInitialPassword: string; storeInitialPassword: string; secureCookie: boolean };
 }
 
@@ -39,6 +41,11 @@ export function loadConfig(): ServerConfig {
       apiKey: opt("MODEL_API_KEY"),
       name: opt("MODEL_NAME"),
       timeoutMs: Number(opt("MODEL_TIMEOUT_MS") ?? 60000),
+    },
+    webSearch: {
+      provider: opt("WEB_SEARCH_PROVIDER"),
+      apiKey: opt("WEB_SEARCH_API_KEY"),
+      timeoutMs: Number(opt("WEB_SEARCH_TIMEOUT_MS") ?? 15000),
     },
     auth: {
       secret: opt("AUTH_SECRET"),

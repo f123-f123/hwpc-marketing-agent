@@ -6,7 +6,7 @@ import type { DataService, FactCategory, FactRecord, ImageRecord, MaterialPack, 
 import { DataServiceError } from "@hwpc/contracts";
 
 export const stableId = (prefix: string, value: string) => `${prefix}-${createHash("sha256").update(value).digest("hex").slice(0, 16)}`;
-const normalized = (v: string) => v.toLocaleLowerCase().replace(/[\s（）()·\-—_]/g, "");
+export const normalized = (v: string) => v.toLocaleLowerCase().replace(/[\s（）()·\-—_]/g, "");
 export const defaultLocalRoot = () => path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../local-data/华为PC全板块深度知识库_v7");
 const categoryFor = (heading: string): FactCategory => {
   if (/系统/.test(heading)) return "os";
@@ -108,7 +108,7 @@ export function parseFacts(markdown: string, product: ProductIdentity, source: S
   return facts;
 }
 
-function csvRows(text: string): string[][] {
+export function csvRows(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], cell = "", quote = false;
   for (let i = 0; i < text.length; i++) {

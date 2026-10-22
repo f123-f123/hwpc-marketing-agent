@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
-import { createWorkflow } from "@hwpc/agent";
-import { createDataService, createDeviceKnowledgeService } from "@hwpc/data";
+import { createKbAdvisorEngine, createKbQaEngine, createWorkflow } from "@hwpc/agent";
+import { createDataService, createDeviceKnowledgeService, createLocalLibrary } from "@hwpc/data";
 import { createMockAdvisorEngine, createMockKnowledgeService, createMockQaEngine, mockSceneDefinitions } from "@hwpc/fixtures";
 import { registeredSceneDefinitions } from "@hwpc/scenes";
 import { createApp } from "./app.js";
@@ -9,6 +9,8 @@ import { createModelService } from "./model.js";
 import { TaskManager } from "./tasks.js";
 import { SessionManager } from "./sessions.js";
 import { FileSessionStore } from "./store.js";
+import { libraryImageProvider, webImageProvider } from "./page/providers.js";
+import { createWebSearch, OFFICIAL_DOMAINS } from "./web/search.js";
 import { SceneRegistry } from "./registry.js";
 import { AuthService } from "./marketing/auth.js";
 import { MarketingRepo } from "./marketing/repo.js";
@@ -38,20 +40,6 @@ const modelConfigured = Boolean(cfg.model.baseUrl && cfg.model.name);
 // 演示链路会停在“没有可用场景”。两种模式都在快照里标注 isMock。
 const knowledge = cfg.dataMode === "mock" ? createMockKnowledgeService() : createDeviceKnowledgeService(data);
 
-const sessions = new SessionManager({
-  store,
-  // 两个智能体相互独立：顾问引擎负责需求沟通与生成方案/体验页，答疑引擎只回答体验页里的提问。
-  // 接入真实模型时分别替换（见 apps/server/README.md）。
-  advisor: createMockAdvisorEngine(),
-  qa: createMockQaEngine(),
-  data,
-  model,
-  knowledge,
-  registry,
-  profile: "server_local",
-  facts: { modelConfigured, imaConnected: activeOrigin === "ima", persistent: store.persistent },
-  dataOrigin,
-});
 // 门店推文模块：数据放在 .runtime/marketing（已 gitignore），平台密钥用主密钥加密保存。
 const marketingDir = path.resolve(process.cwd(), ".runtime", "marketing");
 const marketingRepo = new MarketingRepo(marketingDir);
@@ -60,6 +48,36 @@ const box = new SecretBox(master.secret);
 const auth = new AuthService(marketingRepo, new TokenSigner(master.secret));
 const seeded = auth.seed({ hqPassword: cfg.auth.hqInitialPassword, storePassword: cfg.auth.storeInitialPassword });
 const settings = new SettingsService(marketingRepo, box, cfg.model);
+
+// 知识库整库检索：型号检索卡、卖点与限制、官方公开价格、常见问题、客户场景、图片索引。
+const library = createLocalLibrary(cfg.localKbDir);
+const libraryStatus = await library.status();
+const web = createWebSearch(cfg.webSearch);
+// 大模型随“系统设置”或 .env 生效，改了设置不用重启；没有配置时顾问只用知识库规则。
+const currentModel = () => settings.model().service;
+const realEngines = cfg.dataMode !== "mock" && libraryStatus.state === "connected";
+const productNames = new Map<string, string>();
+if (realEngines) for (const p of (await data.searchProducts("").catch(() => ({ candidates: [] }))).candidates) productNames.set(p.productId, p.model);
+
+const sessions = new SessionManager({
+  store,
+  // 两个智能体相互独立：顾问引擎负责需求沟通与生成方案/体验页，答疑引擎只回答体验页里的提问。
+  // 两者都基于本地知识库；显式 mock 模式（或知识库不可读）才使用模拟引擎，界面会标注模拟。
+  advisor: realEngines ? createKbAdvisorEngine({ library, model: currentModel }) : createMockAdvisorEngine(),
+  qa: realEngines
+    ? createKbQaEngine({ library, model: currentModel, ...(web ? { web: async (q, signal) => (await web.search(q, { domains: OFFICIAL_DOMAINS, limit: 3, ...(signal ? { signal } : {}) })).hits } : {}) })
+    : createMockQaEngine(),
+  fillers: realEngines
+    ? { images: [libraryImageProvider(library), ...(web ? [webImageProvider(web, (id) => productNames.get(id))] : [])], copies: [] }
+    : undefined,
+  data,
+  model,
+  knowledge,
+  registry,
+  profile: "server_local",
+  facts: { modelConfigured, imaConnected: activeOrigin === "ima", persistent: store.persistent },
+  dataOrigin,
+});
 const marketing = {
   auth,
   settings,
@@ -67,13 +85,19 @@ const marketing = {
   secureCookie: cfg.auth.secureCookie,
 };
 
-const app = createApp({ data, model, tasks: new TaskManager(workflow), sessions, marketing, dataMode: cfg.dataMode, corsOrigin: cfg.corsOrigin });
+const app = createApp({ data, model, tasks: new TaskManager(workflow), sessions, marketing, library, dataMode: cfg.dataMode, corsOrigin: cfg.corsOrigin });
 
 // 推文模块已有登录鉴权；选购顾问（/api/sessions）仍无鉴权，因此只绑定本机回环地址。公网部署前需补齐访问控制、限流与 HTTPS。
 serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[server] http://127.0.0.1:${info.port}  dataMode=${cfg.dataMode}  activeDataOrigin=${dataOrigin}`);
   console.log(`[server] ima 凭证: ${cfg.ima.clientId ? `ClientID ${maskSecret(cfg.ima.clientId)}` : "未设置"}；模型: ${cfg.model.name ?? "未配置"}`);
-  console.log("[server] 顾问引擎: 模拟引擎（fixtures，isMock=true）。真实模型引擎尚未接入，界面会标注模拟。");
+  console.log(`[server] 知识库检索: ${libraryStatus.message}`);
+  console.log(
+    realEngines
+      ? `[server] 顾问 / 答疑引擎: 知识库引擎（${settings.view().model.source === "none" ? "规则模式；在总部「系统设置」配置大模型后自动启用改写" : "已配置大模型，回复由模型改写并经数字核验"}）`
+      : "[server] 顾问 / 答疑引擎: 模拟引擎（mock 模式或知识库不可读，isMock=true），界面会标注模拟。",
+  );
+  console.log(`[server] 联网检索: ${web ? `已启用（${web.provider}），用于体验页补图` : "未配置（WEB_SEARCH_PROVIDER / WEB_SEARCH_API_KEY），只用本地知识库"}`);
   for (const s of statuses) console.log(`[server] 资料源 ${s.origin}: ${s.state} — ${s.message}`);
   if (master.generated) console.warn(`[server] 未设置 AUTH_SECRET，已生成主密钥 ${path.join(marketingDir, "master.key")}；公网部署请显式设置 AUTH_SECRET`);
   if (seeded.length) console.warn(`[server] 已创建初始账号：${seeded.join("、")}，口令见 .env 的 HQ_INITIAL_PASSWORD / STORE_INITIAL_PASSWORD（默认 hq123456 / store123456），登录后请立即修改`);

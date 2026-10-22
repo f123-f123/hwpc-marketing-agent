@@ -43,8 +43,9 @@
 
 ```text
 packages/contracts   zod 契约。marketing.ts = 推文模块（用户/门店/绑定/任务/稿件/发布记录/路径）
-packages/data        资料层（local / ima / mock）。guides.ts 读取 P6 平台写作指南
+packages/data        资料层（local / ima / mock）。guides.ts 读取 P6 平台写作指南；library.ts 整库检索（KnowledgeLibrary）
 packages/agent       选购与内容逻辑
+  advisor/           知识库顾问与答疑：lexicon（需求抽取）、profile（型号画像）、assess（带证据筛选）、ask（动态追问）、engine、qa、llm（模型改写 + 数字门槛）
   content/           推文引擎：angles（切入角度轮换）、facts（事实占位符、过滤）、prompt、style（套话/查重）、engine
   verify.ts          事实与合规核验（已改为接收 VerifyScope，选购与推文共用）
 apps/server
@@ -59,8 +60,19 @@ apps/web/src
                      flows/（每个场景的操作流程，纯函数，有测试）+ stages/（虚拟设备舞台：FileTransfer / MultiScreen / Generic）
   styles/            tokens.css → base.css → app.css / scenes.css / marketing.css（只用设计变量；设备材质色是 --sim-*）
 scenes               声明式场景库（服务端注册的状态机 publicDefinitions.ts；空间热点 space.ts）
-fixtures             MOCK 数据与模拟顾问引擎
+fixtures             MOCK 数据与模拟顾问引擎（只在 DATA_SOURCE_MODE=mock 或知识库不可读时使用）
 ```
+
+### 选购顾问：知识库驱动（2026-10-21，替换模拟顾问）
+- **主入口已不再使用模拟引擎**：`apps/server/src/main.ts` 注入 `createKbAdvisorEngine` / `createKbQaEngine`（`packages/agent/src/advisor/`）。只有 `DATA_SOURCE_MODE=mock` 或知识库索引失败时才回退到 fixtures 的模拟引擎（界面照常标注模拟）。
+- 知识库整库检索 `KnowledgeLibrary`（契约 `packages/contracts/src/library.ts`，实现 `packages/data/src/library.ts`）：启动时索引 P1 型号检索卡 / 卖点与限制 / 官方价格快照（`官方价格快照.csv`，按型号名归属）、P2 按型号角色话术、P7 常见问题、P8 客户场景、P6 多屏协同，共 472 份文档；图片 112 张（各型号图片索引、商城款式图片、P6 商城电脑专区素材）。中文二元组 + BM25，确定性、不联网；出处列表 / 元数据小节不进索引。
+- 每轮沟通：规则抽取需求（预算支持“五六千 / 1.2 万 / 5000-7000”，硬性重量、软件、已有设备、偏好、顾虑）→ 读取 10 款型号的事实、官方价格、检索卡建立画像 → 逐条对照给出带证据的评价（满足 / 取舍必须挂知识库原文；待核事实只进“待核实”；硬条件不满足或超预算 12% 以上为不合适）→ 按候选分歧最大的维度追问（鸿蒙与 Windows 都在就问软件；价差大就问预算，选项按真实价格分档；重量差大就问多久带出门……），理由写明真实型号 → 检索型号话术 / 常见问题 / 场景卡作为“资料提醒”，出处随消息保存并在对话下方可展开。
+- 方案：首选 = 规则分最高且满足（或有取舍）的型号；备选理由写“和首选比”的原始数值（价格类型 + 金额、重量、屏幕、系统）；专业软件拿不准时列为待解决问题。场景：现有两个真实场景需要手机 / 显示器的资料证据，知识库里没有这两类产品，所以个人方案暂不绑定场景，体验页的三维空间仍可通用浏览。
+- 答疑：价格（官方价格类型 + 款式 + 核验日期）、参数（原值 + 限制条件）、软件能否安装（系统事实 + P7 原文）、推荐与取舍（取自页面）、其他问题检索知识库原文；涉及改需求只提示回到需求沟通。
+- 大模型：随总部「系统设置」或 `.env` 生效（不用重启）。只用于补充理解需求（quote 必须出自原话）和把规则版回复改写成口语；**改写里出现资料外的数字或“保证 / 最好”等表述就弃用，回到规则版**。没有配置时完全按规则运行。
+- 体验页图片：`apps/server/src/page/providers.ts`。候选图取该型号的官网大图 / 商城款式图（优先宽幅大图）；开场图优先首选型号的宽幅大图，没有就按用途取 P6 场景图并注明“示意图，非指定型号”。图片经 `/api/library/images/:imageId` 读取，只能读索引里登记过的文件。大字展示数值本身，括号说明并入标签。
+- 联网检索（可选）：`.env` 设置 `WEB_SEARCH_PROVIDER=tavily` 与 `WEB_SEARCH_API_KEY` 后启用（`apps/server/src/web/search.ts`）。只在知识库没有合适图片时到华为官方域名找图（标“官网”），答疑在知识库无依据时补充网页参考（标“仅供参考，不作为产品事实”）。**未用真实 Key 联调过。**
+- 演示路径：首页点“出差办公”示例 → 回答追问（软件、屏幕尺寸）→ 确认需求 → 生成体验页 → 侧边问“这几款多少钱”“鸿蒙版能装 Photoshop 吗”。
 
 ### 推文模块已实现
 - 登录：角色 hq / store；HttpOnly Cookie 令牌；改口令使旧令牌失效。首次启动创建 `hq / hq123456`、`store001 / store123456`（`.env` 可改）。
@@ -72,8 +84,8 @@ fixtures             MOCK 数据与模拟顾问引擎
 
 ### 选购顾问：需求沟通 → 全屏体验页（2026-10-20 按用户设想重做）
 - 流程：先在“需求沟通”里把需求聊清楚并确认 → 点“生成我的体验页”（组装方案时一起生成）→ 进入全屏沉浸页，对话折叠；页面里可以侧边提问。
-- 两个智能体：顾问引擎（`AdvisorEngine`）负责需求沟通与生成方案/页面；答疑引擎（`QaEngine`，`packages/contracts/src/qa.ts`）只回答页面里的提问，没有写入口，页面不会因提问改变；问题涉及改需求时只提示回到需求沟通。两者目前都是 fixtures 里的关键词规则模拟。
-- 页面是“版块 + 内容位”的结构（`packages/contracts/src/page.ts`，服务端 `apps/server/src/page/`），不是模型写的 HTML。图片位、文案位由填充器补齐（接口见 `apps/server/README.md`「体验页内容填充」）；**用户说图片来源（官网 / 本地知识库）以后自己配置，目前没有接任何图源**，图片位显示占位。文案先用知识库事实模板句。
+- 两个智能体：顾问引擎（`AdvisorEngine`）负责需求沟通与生成方案/页面；答疑引擎（`QaEngine`，`packages/contracts/src/qa.ts`）只回答页面里的提问，没有写入口，页面不会因提问改变；问题涉及改需求时只提示回到需求沟通。两者已改为知识库驱动（见上一节）。
+- 页面是“版块 + 内容位”的结构（`packages/contracts/src/page.ts`，服务端 `apps/server/src/page/`），不是模型写的 HTML。图片位、文案位由填充器补齐（接口见 `apps/server/README.md`「体验页内容填充」）；已接本地知识库图片与可选的联网官网图片。文案先用知识库事实模板句。
 - 视觉：深色开场（大标题 + 暖光）+ 浅色正文；候选左图固定、右文滚动；滚动淡入；右侧进度条；三维空间和场景任务嵌在“动手体验”版块，场景以浮层打开、关掉回到原位。原来的 需求/候选/体验/方案 分页已并入体验页并删除。
 
 ### 选购顾问（第一阶段，已提交）
@@ -93,7 +105,7 @@ fixtures             MOCK 数据与模拟顾问引擎
    副作用：带“仅限 Windows 版本”脚注的整组事实（如 D 14 两款处理器、特色应用）现在都是 pending_review，推文不会引用；是否放宽待定。
 2. ~~是否提交推文模块~~ 已提交 `cbfccb7`。
 3. 公众号接口需用真实 AppID / AppSecret + IP 白名单联调。
-4. 选购顾问接入真实大模型：按 `packages/contracts/src/advisor.ts` 的 `AdvisorEngine`（respond / answer / interpretFeedback / composePlan）实现，在 `apps/server/src/main.ts` 替换 `createMockAdvisorEngine()`；`packages/agent` 的 `Consultant` 与 `types2.ts` 是另一套状态模型，需要收敛。
+4. ~~选购顾问接入真实引擎~~ 2026-10-21 已改为知识库引擎（见“选购顾问：知识库驱动”）。待办：用真实模型 Key 验证改写效果；联网检索用真实 Key 联调；知识库补充手机 / 显示器的能力资料后，个人方案才能绑定“手机传文件”“多屏扩展”场景；`packages/agent` 里旧的 `Consultant` / `types2.ts`（营销软文对话）未接入主流程，可择机删除或收敛。
 5. 新品事实卡审核流（总部上传资料 → 抽取进待审核 → 人工确认 → 才可用于推文）尚未实现。
 6. 离店个人互动 HTML：目前只有只读快照；旧的离线运行时在第一次重构中作为死代码删除，可从提交 `37d2880` 找回。
 7. 企业微信“客户朋友圈发表任务”接口可实现总部一键下发、导购一键发表，尚未接入。
@@ -116,7 +128,7 @@ npx vitest run                    # 全部测试
 npm run build
 ```
 
-- 本地知识库放在 `code/local-data/华为PC全板块深度知识库_v7`（gitignore），P1 产品参数、P6 平台模板已被使用；P2 话术、P8 场景尚未接入。
+- 本地知识库放在 `code/local-data/华为PC全板块深度知识库_v7`（gitignore，与 `E:\Claude\黑客松_华为\华为PC知识库\华为PC全板块深度知识库_v7` 内容一致）。选购顾问使用 P1 事实 / 检索卡 / 卖点与限制 / 官方价格 / 图片、P2 型号话术、P7 常见问题、P8 场景卡、P6 图片素材；推文使用 P1 与 P6 平台模板。
 - 推文模块数据在 `apps/server/.runtime/marketing/`（gitignore），删除该目录即重置（会重新创建初始账号与主密钥；**删除主密钥会使已保存的平台密钥无法解密**）。
 - 公网部署前：设置 `AUTH_SECRET`、`COOKIE_SECURE=true`，为选购顾问接口加鉴权，加限流与 HTTPS。
 

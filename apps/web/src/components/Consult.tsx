@@ -1,5 +1,5 @@
 import { NEED_KEY_LABEL, type SessionSnapshot } from "@hwpc/contracts";
-import { ENTRY_STATUS_LABEL, NEEDS_STATUS_LABEL } from "../lib/labels";
+import { ENTRY_STATUS_LABEL, NEEDS_STATUS_LABEL, OUTCOME_LABEL, OUTCOME_TONE } from "../lib/labels";
 import { nextStep } from "../lib/stage";
 import type { SessionActions } from "../state/useSession";
 import { useSceneEntry } from "../state/useSceneEntry";
@@ -18,6 +18,8 @@ export function Consult({ snap, busy, actions, onPage }: { snap: SessionSnapshot
   const missing = needs.summary.groups.filter((g) => g.entries.length === 0);
   const step = nextStep(snap);
   const hasPage = Boolean(snap.page);
+  // 候选随每轮沟通重新筛选；评价落后于当前需求时不展示，避免把旧结论当成当前推荐。
+  const cands = snap.candidates.stale ? [] : snap.candidates.assessments;
 
   const run = () => {
     switch (step.action) {
@@ -68,6 +70,23 @@ export function Consult({ snap, busy, actions, onPage }: { snap: SessionSnapshot
           </dl>
         )}
         {missing.length > 0 && filled.length > 0 && <p className="muted small">还可以补充：{missing.map((g) => NEED_KEY_LABEL[g.key]).join("、")}。不说也没关系。</p>}
+        {cands.length > 0 && (
+          <section className="consult-cands" aria-labelledby="consult-cands-title">
+            <h2 id="consult-cands-title">知识库筛出的候选</h2>
+            <ol>
+              {cands.map((c) => (
+                <li key={c.candidateId}>
+                  <p className="consult-cand-head">
+                    <span className="consult-cand-name">{c.modelName.replace(/^HUAWEI\s+/i, "")}</span>
+                    <Badge tone={OUTCOME_TONE[c.overall]}>{OUTCOME_LABEL[c.overall]}</Badge>
+                  </p>
+                  <p className="consult-cand-reason">{c.comparisonReason}</p>
+                </li>
+              ))}
+            </ol>
+            <p className="muted small">候选会随你补充的信息重新筛选；确认需求后生成完整方案和体验页。</p>
+          </section>
+        )}
         {needs.summary.assumptions.length > 0 && (
           <Alert tone="warning"><strong>请核对这些推断：</strong><ul>{needs.summary.assumptions.map((a) => <li key={a.entryId}>{a.text}</li>)}</ul></Alert>
         )}

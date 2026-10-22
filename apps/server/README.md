@@ -33,10 +33,20 @@ $env:DATA_SOURCE_MODE='mock'; npm run dev:server   # 显式 MOCK 演示（引擎
 | POST | `/api/sessions/:id/qa` | 体验页侧边提问 `{question, baseRevision}`：答疑智能体回答，只记录，不改需求/方案/页面 |
 | GET | `/api/sessions/:id/export?format=recovery_json\|recovery_html` | 只读恢复包 |
 | POST | `/api/recovery/verify` | 校验恢复包完整性 |
+| GET | `/api/library/status` | 知识库索引状态（文档、图片、官方价格条数） |
+| GET | `/api/library/images/:imageId` | 知识库图片（只读取图片索引里登记过的文件） |
 
 写操作都带 `baseRevision`；过期返回 `409 stale_revision` 并附最新快照。同一会话的异步写操作在 `SessionManager` 内串行执行。
 
 旧营销接口 `/api/tasks/*` 仍在，但面试/演示的主链路是上表。
+
+## 顾问引擎（知识库驱动）
+
+`main.ts` 注入 `createKbAdvisorEngine` 与 `createKbQaEngine`（`packages/agent/src/advisor/`），两者都依赖 `createLocalLibrary(LOCAL_KB_DIR)` 建立的整库检索。`DATA_SOURCE_MODE=mock` 或知识库索引失败时才回退到 fixtures 的模拟引擎，启动日志会写明当前用的是哪一种。
+
+- 每轮：抽取需求编辑 → 读取全部型号的事实 / 官方价格 / 型号检索卡建立画像 → 带证据逐条评价并排序 → 按候选分歧追问 → 检索型号话术、常见问题、场景卡作为提醒，出处写进消息的 `references`。
+- 大模型通过 `settings.model()` 取得（总部「系统设置」优先，其次 `.env`），每次调用时读取，改设置不用重启。模型只补充理解需求、改写回复；改写结果里的数字必须都能在给模型的材料里找到，否则用规则版。
+- 评价、追问、方案选择全部由程序完成，服务端照常校验引擎输出。
 
 ## 体验页（`src/page/`）
 
@@ -48,7 +58,8 @@ $env:DATA_SOURCE_MODE='mock'; npm run dev:server   # 显式 MOCK 演示（引擎
 
 ### 体验页内容填充
 
-`page/fill.ts` 定义两类填充器，在 `main.ts` 里通过 `SessionManager({ fillers })` 注册，默认一个都没有：
+`page/fill.ts` 定义两类填充器，在 `main.ts` 里通过 `SessionManager({ fillers })` 注册。当前注册的是 `page/providers.ts`：
+本地知识库图片（候选型号的官网 / 商城图，开场用首选型号宽幅大图或按用途选的 P6 场景图），以及配置了联网检索时的官网图片兜底。接口形状：
 
 ```ts
 const fillers: PageFillers = {
@@ -62,7 +73,7 @@ const fillers: PageFillers = {
 - 填充在会话写队列之外进行（可以调用外部接口），结果再进队列写回，只更新仍是 `pending` 的位置；期间页面被新方案取代，结果直接丢弃。
 - 有可填的空位时快照里 `page.filling = true`，前端每 1.5 秒轮询一次，填完停止。
 
-建议的接入顺序：本地知识库 `图片索引.csv`（官网产品图，带来源与说明）→ 官网页面 → 检索 API。
+联网检索：`.env` 设置 `WEB_SEARCH_PROVIDER=tavily`、`WEB_SEARCH_API_KEY`（可选 `WEB_SEARCH_TIMEOUT_MS`）。只在华为官方域名里找图，标为 `official_web`；未配置时不出现任何联网来源。
 
 ### 答疑智能体
 
@@ -70,8 +81,8 @@ const fillers: PageFillers = {
 
 - 它只看到只读视图（页面、方案、已确认的需求、最近几轮问答），接口里没有任何写入口；服务端只把问答追加到会话记录。
 - 问题实际上是在改需求时，返回 `suggestNeedChange: true`，界面显示“回到需求沟通”，页面本身不变。
-- 当前接的是 `fixtures` 的模拟答疑（关键词规则，回复带“模拟答疑”前缀）；没有配置时提问会得到“答疑智能体尚未配置”的失败回复，而不是假装回答。
-- 接入真实模型：实现 `QaEngine.answer(view, question, deps)`，在 `main.ts` 里替换 `createMockQaEngine()`。
+- 当前接的是知识库答疑 `createKbQaEngine`：价格报官方价格类型、款式与核验日期；参数报原值与限制条件；软件能否安装引用 P7 原文；其他问题检索知识库原文。知识库没有依据时，配置了联网检索就附网页参考（标“仅供参考”），否则如实说没有依据。
+- 配置了大模型时由模型组织语言，同样要过数字核验。没有注入答疑引擎时提问会得到“答疑智能体尚未配置”的失败回复，而不是假装回答。
 
 ## 门店推文模块（`src/marketing/`）
 

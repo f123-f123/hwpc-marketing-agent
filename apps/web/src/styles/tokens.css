@@ -109,7 +109,7 @@
   --ip-ph-ink: rgb(27 29 33 / 8%);
   --text-hero: clamp(40px, 6vw, 88px);
   --text-section-title: clamp(30px, 3.4vw, 52px);
-  --text-figure: clamp(30px, 3.4vw, 52px);
+  --text-figure: clamp(26px, 2.4vw, 44px);
   --ip-section-pad: clamp(72px, 10vw, 140px);
   --ip-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 

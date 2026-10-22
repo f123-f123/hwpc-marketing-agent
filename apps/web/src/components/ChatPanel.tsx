@@ -104,6 +104,19 @@ export function ChatPanel({ snap, busy, actions, onOpenScene }: {
                     ))}
                   </div>
                 )}
+                {m.references && m.references.length > 0 && (
+                  <details className="msg-refs">
+                    <summary>知识库出处 {m.references.length} 条</summary>
+                    <ul>
+                      {m.references.map((r) => (
+                        <li key={`${r.locator ?? ""}${r.title}`}>
+                          <span className="msg-ref-title">{r.section && <span className="msg-ref-section">{r.section}</span>}{r.title}</span>
+                          {r.excerpt && <q className="msg-ref-quote">{r.excerpt}</q>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
             </li>
           ))}

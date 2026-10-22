@@ -16,6 +16,7 @@ import {
   type ConnectionStatus,
   type DataService,
   type ExportResponse,
+  type KnowledgeLibrary,
   type ModelService,
   AnswersRequestSchema, ComposePlanRequestSchema, ConfirmRequestSchema, CreateSessionRequestSchema,
   ExploreRequestSchema, FeedbackRequestSchema, MessageRequestSchema, NeedEditRequestSchema, QaRequestSchema,
@@ -40,6 +41,8 @@ export interface AppDeps {
   /** 门店推文模块（登录、任务、稿件、发布）。 */
   marketing?: MarketingModule;
   dataMode?: "auto" | "mock" | "local" | "ima";
+  /** 知识库整库检索（体验页图片、顾问引用）。 */
+  library?: KnowledgeLibrary;
   corsOrigin: string;
   /** 配置的资料模式，用于计算 activeDataOrigin。 */
   version?: string;
@@ -198,6 +201,18 @@ export function createApp(deps: AppDeps) {
       headers: { "content-type": content.mimeType, "cache-control": "private, max-age=300", "x-content-type-options": "nosniff" },
     });
   });
+
+  // 知识库图片：只读取索引里登记过的文件（体验页、顾问引用使用）。
+  if (deps.library) {
+    const library = deps.library;
+    app.get("/api/library/images/:imageId", async (c) => {
+      const content = await library.readImage(c.req.param("imageId"));
+      return new Response(content.bytes as unknown as ConstructorParameters<typeof Response>[0], {
+        headers: { "content-type": content.mimeType, "cache-control": "public, max-age=86400", "x-content-type-options": "nosniff" },
+      });
+    });
+    app.get("/api/library/status", async (c) => c.json(await library.status()));
+  }
 
   if (deps.marketing) registerMarketingRoutes(app, deps.marketing, body);
 

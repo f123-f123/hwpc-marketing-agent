@@ -27,6 +27,19 @@ export const NeedEditSchema = z.discriminatedUnion("op", [
 ]);
 export type NeedEdit = z.infer<typeof NeedEditSchema>;
 
+/* ------------------------------ 知识库出处 ------------------------------ */
+
+/** 顾问本轮检索并引用的知识库原文（界面显示在回复下方，便于核对）。 */
+export const AdvisorReferenceSchema = z.object({
+  title: z.string().min(1),
+  /** 板块名，如“型号检索卡”“常见问题”。 */
+  section: z.string().optional(),
+  excerpt: z.string().max(600).optional(),
+  locator: z.string().optional(),
+  officialUrl: z.string().url().optional(),
+});
+export type AdvisorReference = z.infer<typeof AdvisorReferenceSchema>;
+
 /* ------------------------------ 问题提议 ------------------------------ */
 
 export const QuestionProposalSchema = z.object({
@@ -80,6 +93,8 @@ export const AdvisorProposalSchema = z.object({
   candidates: z.array(CandidateAssessmentSchema).optional(),
   /** 建议用户“看看”的通用场景，仅用于说明性浏览，不是个性化推荐。 */
   suggestedScenes: z.array(z.object({ sceneId: SceneIdSchema, version: SceneVersionSchema, reason: z.string().min(1) })).default([]),
+  /** 本轮检索到并用于回复的知识库原文。 */
+  references: z.array(AdvisorReferenceSchema).max(6).default([]),
 });
 export type AdvisorProposal = z.infer<typeof AdvisorProposalSchema>;
 

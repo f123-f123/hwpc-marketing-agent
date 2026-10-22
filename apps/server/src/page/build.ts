@@ -41,6 +41,24 @@ const shortField = (field: string) => field.split("·").at(-1) ?? field;
 
 /** 适合做成大字的事实：短、以数字或“约”开头。 */
 const isFigure = (v: string) => v.length <= 18 && /^(约\s*)?\d/.test(v.trim());
+/**
+ * 大字只放数值本身，括号里的说明并入标签：“56 Wh（额定容量）”→ 56 Wh / 电池容量（额定容量）。
+ * 数值与说明都是资料原文，只是换了摆放位置。
+ */
+export function splitFigure(field: string, value: string): { label: string; value: string } {
+  const parts = field.split("·");
+  const own = parts.at(-1) ?? field;
+  const label = /^(尺寸|容量|类型|亮度)$/.test(own) && parts.length > 1 ? `${parts[0]}${own}` : own;
+  const m = value.match(/^(.+?)\s*[（(]([^）)]+)[）)]\s*$/);
+  return m ? { value: m[1]!.trim(), label: `${label}（${m[2]!.trim()}）` } : { value, label };
+}
+
+/** 大字优先展示顾客最关心的几项。 */
+const FIGURE_ORDER = [/重量$/, /屏幕·尺寸$/, /电池·容量$/, /亮度$/, /(厚度|高度)$/];
+const figureRank = (field: string) => {
+  const i = FIGURE_ORDER.findIndex((re) => re.test(field));
+  return i < 0 ? FIGURE_ORDER.length : i;
+};
 
 function points(list: CandidateAssessment["satisfied"], hard?: (i: number) => boolean): PagePoint[] {
   return list.map((c, i) => ({
@@ -79,7 +97,8 @@ export function buildExperiencePage(input: PageBuildInput): ExperiencePage {
     headline: task ? `${trimEnd(task)}，\n从适合你的那台开始。` : "从适合你的那台开始。",
     lede,
     chips,
-    image: { slotId: id(), intent: task ? `与“${trimEnd(task)}”相符的使用场景` : "笔记本电脑的使用场景", roles: ["scene", "hero"], status: "pending" },
+    // 有首选时开场用首选机型的大图；填充器找不到合适的大图再退回到与用途相符的场景图。
+    image: { slotId: id(), intent: task ? `与“${trimEnd(task)}”相符的使用场景` : "笔记本电脑的使用场景", ...(primary ? { product: primary.product } : {}), roles: ["scene", "hero"], status: "pending" },
   };
 
   /* ---- 你的日常 ---- */
@@ -97,7 +116,11 @@ export function buildExperiencePage(input: PageBuildInput): ExperiencePage {
     .sort((a, b) => ROLE_ORDER[roleOf(a.candidateId)?.role ?? "unranked"] - ROLE_ORDER[roleOf(b.candidateId)?.role ?? "unranked"])
     .map((c) => {
       const facts = selectFacts(input.facts[c.product.productId] ?? [], []).map((a) => a.fact);
-      const figures = facts.filter((f) => isFigure(f.value)).slice(0, 3);
+      const figures = facts
+        .filter((f) => isFigure(f.value))
+        .sort((a, b) => figureRank(a.field) - figureRank(b.field))
+        .filter((f, i, all) => all.findIndex((x) => shortField(x.field) === shortField(f.field)) === i)
+        .slice(0, 3);
       const described = facts.slice(0, 3);
       const intro: CopySlot = described.length
         ? {
@@ -123,7 +146,7 @@ export function buildExperiencePage(input: PageBuildInput): ExperiencePage {
         verdict: role?.reason ?? c.comparisonReason,
         intro,
         image,
-        highlights: figures.map((f) => ({ label: shortField(f.field), value: f.value, factId: f.factId, qualifiers: f.qualifiers })),
+        highlights: figures.map((f) => ({ ...splitFigure(f.field, f.value), factId: f.factId, qualifiers: f.qualifiers })),
         satisfied: points(c.satisfied),
         compromises: points(c.compromises),
         unmet: points(c.unmet, (i) => c.unmet[i]!.hard),

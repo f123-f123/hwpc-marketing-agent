@@ -4,7 +4,7 @@ import { CandidateAssessmentSchema } from "./candidates.js";
 import { CapabilityReportSchema } from "./capabilities.js";
 import { ExperienceRecordSchema, FeedbackKindSchema, FeedbackRecordSchema, ImpactRecordSchema } from "./experience.js";
 import { NeedConfirmationSchema, NeedEntrySchema, NeedKeySchema, NeedSummarySchema, NeedVersionRecordSchema } from "./needs.js";
-import { NeedEditSchema, QuestionProposalSchema } from "./advisor.js";
+import { AdvisorReferenceSchema, NeedEditSchema, QuestionProposalSchema } from "./advisor.js";
 import { PersonalPlanSchema } from "./plan.js";
 import { ExperiencePageSchema } from "./page.js";
 import { QaTurnSchema } from "./qa.js";
@@ -30,6 +30,8 @@ export const SessionMessageSchema = z.object({
   needVersion: z.number().int().positive(),
   /** 顾问建议“看看”的已注册场景（说明性浏览，不是个性化推荐）。已由服务端校验存在且可用。 */
   suggestedScenes: z.array(z.object({ sceneId: SceneIdSchema, version: SceneVersionSchema, reason: z.string() })).optional(),
+  /** 顾问这条回复引用的知识库原文。 */
+  references: z.array(AdvisorReferenceSchema).optional(),
 });
 export type SessionMessage = z.infer<typeof SessionMessageSchema>;
 

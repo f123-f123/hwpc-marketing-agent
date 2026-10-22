@@ -37,3 +37,14 @@ export { articleText, findCliches, similarity, SIMILARITY_LIMIT } from "./conten
 export { verifyAndRepair, scopeFromState } from "./verify.js";
 export type { VerifyScope } from "./verify.js";
 export { topicsIn } from "./lexicon.js";
+
+// 门店选购：知识库顾问与答疑智能体
+export { createKbAdvisorEngine, createCatalog, composeReply } from "./advisor/engine.js";
+export type { KbAdvisorOptions } from "./advisor/engine.js";
+export { createKbQaEngine } from "./advisor/qa.js";
+export { extractEdits, wantsOf, parseBudget } from "./advisor/lexicon.js";
+export { assessAll } from "./advisor/assess.js";
+export { nextQuestions } from "./advisor/ask.js";
+export { buildProfile, pickPrice } from "./advisor/profile.js";
+export { numbersGrounded } from "./advisor/llm.js";
+export type { ModelResolver } from "./advisor/llm.js";
