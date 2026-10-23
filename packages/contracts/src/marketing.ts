@@ -15,6 +15,7 @@ import { IdSchema, IsoDateTimeSchema, PlatformSchema } from "./common.js";
 import { FactRecordSchema, ImageRecordSchema } from "./material.js";
 import { ProductRefSchema } from "./product.js";
 import { VerificationReportSchema } from "./verification.js";
+import { PostStyleSchema, StyleChoiceSchema } from "./creative.js";
 
 /* ------------------------------ 登录 ------------------------------ */
 
@@ -168,6 +169,8 @@ export const CampaignInputSchema = z.object({
   mustAvoid: z.string().max(200).default(""),
   dueAt: z.string().max(30).default(""),
   notes: z.string().max(500).default(""),
+  /** 默认风格（可选）：不填的一项由系统按平台与人群为每个版本轮换。 */
+  style: StyleChoiceSchema.optional(),
 });
 export type CampaignInput = z.infer<typeof CampaignInputSchema>;
 
@@ -196,6 +199,8 @@ export const PostVariantSchema = z.object({
   mode: z.enum(["model", "template"]),
   /** 与同一任务、同一平台其他门店已选稿件的最高相似度（0–1）。 */
   similarity: z.number().min(0).max(1).default(0),
+  /** 本版本使用的语言风格与视觉风格（早期稿件没有该字段）。 */
+  style: PostStyleSchema.optional(),
   createdAt: IsoDateTimeSchema,
 });
 export type PostVariant = z.infer<typeof PostVariantSchema>;

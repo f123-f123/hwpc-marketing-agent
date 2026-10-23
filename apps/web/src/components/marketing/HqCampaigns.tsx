@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PLATFORM_NAME, type CampaignInput, type Platform } from "@hwpc/contracts";
+import { PLATFORM_NAME, VISUAL_STYLES, VOICE_STYLES, type CampaignInput, type Platform } from "@hwpc/contracts";
 import { marketingApi } from "../../api/marketing";
 import { href, navigate } from "../../lib/router";
 import { useAction, useLoad } from "../../lib/useLoad";
@@ -50,6 +50,22 @@ function NewCampaign({ auth, onCreated }: { auth: Auth; onCreated: () => void })
       <div className="form-grid">
         <label className="field"><span>不要出现</span><input className="input" value={form.mustAvoid} onChange={(e) => setForm({ ...form, mustAvoid: e.target.value })} maxLength={200} /></label>
         <label className="field"><span>截止日期</span><input className="input" type="date" value={form.dueAt} onChange={(e) => setForm({ ...form, dueAt: e.target.value })} /></label>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>默认语言风格（可选）</span>
+          <select className="input" value={form.style?.voice ?? ""} onChange={(e) => setForm({ ...form, style: { ...form.style, voice: e.target.value || undefined } })}>
+            <option value="">自动：按平台和人群为三个版本搭配不同语气</option>
+            {VOICE_STYLES.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>默认视觉风格（可选，用于海报与小红书封面）</span>
+          <select className="input" value={form.style?.visual ?? ""} onChange={(e) => setForm({ ...form, style: { ...form.style, visual: e.target.value || undefined } })}>
+            <option value="">自动：按平台和人群搭配</option>
+            {VISUAL_STYLES.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.suited}</option>)}
+          </select>
+        </label>
       </div>
       <label className="field"><span>给门店的备注</span><textarea className="textarea" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} maxLength={500} /></label>
       {act.error && <Alert tone="danger">{act.error}</Alert>}

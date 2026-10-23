@@ -5,7 +5,7 @@
  * 先写读者的动作再出现参数；主动说明一个边界。
  * 事实只能以 {{F编号}} 占位符出现，由程序按原文填入，限制条件由程序附在段落后；门店地址、活动由程序追加。
  */
-import type { Platform, StoreProfile } from "@hwpc/contracts";
+import type { Platform, StoreProfile, VoiceStyle } from "@hwpc/contracts";
 import { PLATFORM_PLANS } from "../strategy.js";
 import type { Angle } from "./angles.js";
 import type { FactAlias, ImageAlias } from "./facts.js";
@@ -83,8 +83,33 @@ const OUTPUT: Record<Platform, string> = {
   store_poster: '{"titleOptions":["主标题1（≤12字）","主标题2","主标题3"],"lead":"副标题（≤20字）","blocks":[{"type":"image","image":"I1","caption":"…"},{"type":"paragraph","text":"卖点1\\n卖点2\\n卖点3"}],"callToAction":"…（≤16字）","tags":[]}',
 };
 
-export function systemPrompt(platform: Platform, styleGuide?: string): string {
+const EMOJI_RULE: Record<VoiceStyle["emoji"], string> = {
+  none: "不用表情符号",
+  restrained: "最多 1–2 个，放在段尾，不放在标题里",
+  auto: "按平台习惯，全文最多 3 个",
+};
+
+/** 语言风格（来自创作规范库）：决定怎么说，不改变说什么。 */
+export function voiceSection(v: VoiceStyle, platform?: Platform): string[] {
+  // 海报一屏一结论，任何语气下都不放表情符号
+  const emoji = platform === "store_poster" ? "海报不用表情符号" : EMOJI_RULE[v.emoji];
+  return [
+    `【语言风格：${v.name}】决定句长、措辞、叙述视角、情绪、表情和收尾方式；平台结构、篇幅、配图数量与事实规则不变。`,
+    `- 视角：${v.person}`,
+    `- 节奏：${v.rhythm}`,
+    `- 用词：${v.vocabulary}`,
+    `- 情绪：${v.emotion}`,
+    `- 表情符号：${emoji}`,
+    `- 收尾：${v.cta}`,
+    `- 避免：${v.avoid.join("；")}`,
+    "- 与上面的口吻、表情要求冲突时，以本语言风格为准；但不得为了风格编造体验、人物、数字、库存或优惠。",
+  ];
+}
+
+export function systemPrompt(platform: Platform, styleGuide?: string, voice?: VoiceStyle): string {
   const plan = PLATFORM_PLANS[platform];
+  // 指定了语言风格时，表情符号的用法由语言风格决定，去掉平台写法里关于表情的那一条
+  const craft = PLATFORM_CRAFT[platform].filter((x) => !(voice && /表情符号/.test(x)));
   return [
     `你是华为电脑门店的资深内容编辑，替门店导购写一条可以直接发在「${platformName(platform)}」的内容。`,
     "导购的身份是“店里的人”：可以介绍、可以邀请到店，但不是买家，也不是测评博主。",
@@ -101,8 +126,9 @@ export function systemPrompt(platform: Platform, styleGuide?: string): string {
     `- 结构：${plan.structure.join(" → ")}`,
     `- 篇幅：${plan.lengthRange.min}–${plan.lengthRange.max} 字；配图 ${plan.imageCount.min}–${plan.imageCount.max} 张（只能用「可用图片」里的编号）`,
     `- 语气：${plan.tone}`,
-    ...PLATFORM_CRAFT[platform].map((x) => `- ${x}`),
+    ...craft.map((x) => `- ${x}`),
     "",
+    ...(voice ? [...voiceSection(voice, platform), ""] : []),
     "【事实规则（最重要，违反的句子会被程序删除）】",
     "- 任何参数、数值、功能名、规格，只能写成占位符 {{F编号}}，例如“机身重量{{F2}}”。程序会用资料原文替换，并把资料里的限制条件自动附在该段后面——你不要自己抄写限制条件。",
     "- 占位符前后不要再加数字、单位或程度词（如“仅”“只有”“超长”“足足”）。",

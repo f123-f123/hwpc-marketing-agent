@@ -28,3 +28,4 @@ export * from "./session.js";
 export * from "./recovery.js";
 export * from "./api.js";
 export * from "./marketing.js";
+export * from "./creative.js";

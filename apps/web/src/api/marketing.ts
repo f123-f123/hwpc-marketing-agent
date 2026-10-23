@@ -17,6 +17,7 @@ import {
   type ChannelBindingInput,
   type Platform,
   type StoreProfile,
+  type StyleChoice,
   type SystemSettingsInput,
 } from "@hwpc/contracts";
 import { call, type Schema } from "./client";
@@ -64,7 +65,8 @@ export const marketingApi = {
   // 稿件
   openPost: (campaignId: string, platform: Platform) => call(MARKETING_PATHS.posts, PostSchema, { campaignId, platform }),
   post: (id: string) => call(MARKETING_PATHS.post(id), PostSchema),
-  regenerate: (id: string) => call(MARKETING_PATHS.postGenerate(id), PostSchema, {}),
+  /** style：本次指定的语言 / 视觉风格，不填的一项由系统轮换。 */
+  regenerate: (id: string, style: StyleChoice = {}) => call(MARKETING_PATHS.postGenerate(id), PostSchema, style),
   select: (id: string, variantId: string) => call(MARKETING_PATHS.postSelect(id), PostSchema, { variantId }),
   edit: (id: string, article: Article) => call(MARKETING_PATHS.postEdit(id), PostSchema, { article }),
   publish: (id: string) => call(MARKETING_PATHS.postPublish(id), PublishResponseSchema, {}),

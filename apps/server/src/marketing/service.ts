@@ -25,7 +25,9 @@ import {
   type PublishResponse,
   type StoreCampaignView,
   type StoreProfile,
+  type StyleChoice,
   type User,
+  voiceById,
 } from "@hwpc/contracts";
 
 import type { MarketingRepo, BindingRecord } from "./repo.js";
@@ -262,7 +264,7 @@ export class MarketingService {
     return undefined;
   }
 
-  private async generateInto(post: Post, campaign: Campaign, store: StoreProfile, round: number): Promise<Post> {
+  private async generateInto(post: Post, campaign: Campaign, store: StoreProfile, round: number, style?: StyleChoice): Promise<Post> {
     const pack = await this.loadPack(campaign);
     const unresolved = pack.conflicts.filter((c) => c.status === "unresolved");
     const guide = await readPlatformGuide(post.platform, this.deps.localKbDir);
@@ -277,6 +279,8 @@ export class MarketingService {
       count: VARIANT_COUNT,
       round,
       seed: `${store.storeId}:${campaign.campaignId}:${post.platform}`,
+      // 门店本次选择优先，其次总部任务默认；都没有时按平台与人群轮换
+      style: { ...campaign.style, ...style },
       ...(model.service ? { model: model.service } : {}),
       temperature: model.temperature,
       now: () => new Date(),
@@ -288,13 +292,13 @@ export class MarketingService {
       judgement: {
         audience: [campaign.audience, store.audience].filter(Boolean).join("；"),
         scene: campaign.theme,
-        strategy: `切入角度：${variants.map((v) => v.angle).join(" / ")}。${model.source === "none" ? "未配置写作模型，使用模板稿。" : ""}`,
+        strategy: `切入角度：${variants.map((v) => v.angle).join(" / ")}。语言风格：${[...new Set(variants.map((v) => voiceById(v.style.voice)?.name))].join(" / ")}。${model.source === "none" ? "未配置写作模型，使用模板稿（语言风格不生效）。" : ""}`,
       },
       facts: pack.facts.filter((f) => f.reviewStatus === "verified" && f.category !== "price"),
       images: pack.images,
       gaps: [...pack.gaps, ...unresolved.map((c) => `资料冲突未解决：${c.field}`)],
       isMock: pack.isMock,
-      variants: variants.map((v) => ({ variantId: randomUUID(), angle: v.angle, article: v.article, report: v.report, mode: v.mode, similarity: v.similarity, createdAt: t })),
+      variants: variants.map((v) => ({ variantId: randomUUID(), angle: v.angle, article: v.article, report: v.report, mode: v.mode, similarity: v.similarity, style: v.style, createdAt: t })),
       round,
       revision: post.revision + 1,
       updatedAt: t,
@@ -345,7 +349,7 @@ export class MarketingService {
     return this.once(`${storeId}:${campaignId}:${platform}`, () => this.generateInto(base, campaign, store, 0));
   }
 
-  async regenerate(postId: string, user: User): Promise<Post> {
+  async regenerate(postId: string, user: User, style?: StyleChoice): Promise<Post> {
     const post = this.ownPost(postId, user);
     if (user.role !== "store") throw new MarketingError("forbidden", "只有门店账号可以生成推文");
     if (post.status === "published") throw new MarketingError("invalid_state", "已发布的稿件不能重新生成");
@@ -354,7 +358,7 @@ export class MarketingService {
     const store = this.profile(post.storeId);
     const reason = this.gate(campaign, post.platform, store);
     if (reason) throw new MarketingError("invalid_state", reason);
-    return this.once(`${post.storeId}:${post.campaignId}:${post.platform}`, () => this.generateInto(post, campaign, store, post.round + 1));
+    return this.once(`${post.storeId}:${post.campaignId}:${post.platform}`, () => this.generateInto(post, campaign, store, post.round + 1, style));
   }
 
   select(postId: string, variantId: string, user: User): Post {

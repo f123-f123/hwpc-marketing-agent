@@ -139,3 +139,12 @@ npm run build
 - 所有视觉值来自 `styles/tokens.css`；中文正文 ≥ 14px、最小 12px，不用负字距，图标用 `components/ui.tsx` 的 SVG。
 - 门控写在服务端程序里，不靠提示词；模拟内容必须标注；事实只能来自知识库原文。
 - 修 bug 先写能复现的测试，确认修复前失败、修复后通过。
+
+## 七、2026-10-22 更新：ima 实测、调用次数控制、创作风格接入
+
+- **ima（已用真实凭证验证）**：`packages/data/src/ima.ts` 按官方文档（ima-skills 1.1.10）与实测返回重写。实测：`search_knowledge_base` 返回 `kb_id/kb_name`；根目录只有一个与知识库同名的包装文件夹，文件夹以 `media_id + title + media_type 99` 返回；P1 在其下一层；事实文件名为 `产品事实.md`（按标题“# 型号 - 产品事实”识别，`article.md` 也可）；图片取型号目录 `images/` 中登记在 `图片索引.csv` 的文件。测试 `packages/data/test/ima.test.ts`。
+- **调用次数（每个账号约 2000 次）**：知识库定位、目录、下载内容进程内缓存 30 分钟；`IMA_CALL_BUDGET`（默认 300）是每个进程的上限，用完后 auto 模式回到本地；`local` / `mock` 模式完全不请求 ima。启动约 6 次，每个型号首次取资料约 4 次。自测请用 `DATA_SOURCE_MODE=local` 覆盖，避免消耗。
+- **auto 模式分发**：资料包按型号 ID 前缀（`ima-` 走 ima，其余走本地），图片按自身来源读取；接入 ima 之前创建的任务仍读本地。
+- **出站代理**：`.env` 的 `NODE_USE_ENV_PROXY=1 / HTTPS_PROXY / NO_PROXY` 由 `apps/server/src/config.ts` 在加载 .env 后调用 `http.setGlobalProxyFromEnv` 生效（本机 Clash 只接管部分程序，Node 直连会超时）。
+- **联网检索**：新增 `WEB_SEARCH_BASE_URL`（兼容 Tavily 请求格式的地址，填根地址自动补 /search）；只填 `WEB_SEARCH_API_KEY` 即启用。启动日志说明未启用的原因。
+- **创作风格**：仓库外 `skills/hwpc-creative-studio` 的 presets.json 经 `npm run sync:creative` 复制到 `packages/contracts/src/creative-presets.json`（`creative.ts` 校验并提供 `pickStyles` / `platformStylePool`）。语言风格进入推文系统提示词（`content/prompt.ts` 的 `voiceSection`），视觉风格用于海报预览 / PNG 与小红书封面（`apps/web/src/lib/creativeTheme.ts`、`Previews.tsx`）。任务可设默认风格（`Campaign.style`），门店重写可指定（`POST /posts/:id/generate` body `{voice?, visual?}`），每个版本记录 `style`。多语言与平台外内容规格未接入应用。

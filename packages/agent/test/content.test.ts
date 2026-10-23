@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MaterialPack, ModelService, StoreProfile } from "@hwpc/contracts";
+import { visualById, voiceById, type MaterialPack, type ModelService, type StoreProfile } from "@hwpc/contracts";
 import { createMockDataService } from "@hwpc/fixtures";
 import { generatePostVariants, parseModelJson, pickAngles, similarity, verifyAndRepair, type PostEngineInput } from "../src/index.js";
 import { selectFacts, shortModel } from "../src/content/facts.js";
@@ -283,5 +283,34 @@ describe("推文质量：模板稿与提示词", () => {
     const sp = systemPrompt("xiaohongshu");
     for (const k of ["问题、做了什么动作", "写作节拍", "coverText", "titleOptions", "交稿前自查", "反例", "不要自己抄写限制条件"]) expect(sp).toContain(k);
     expect(systemPrompt("store_poster")).toContain("不超过 12 个字");
+  });
+});
+
+describe("创作规范库：语言风格进入写作，视觉风格随版本记录", () => {
+  it("三个版本使用三种不同的语言风格，模型收到对应的风格要求", async () => {
+    const seen: string[] = [];
+    const base = fakeModel("");
+    const model: ModelService = { ...base, complete: async (req) => { seen.push(req.messages[0]!.content); return base.complete(req); } };
+    const vs = await generatePostVariants(input({ pack: await pack(), platform: "xiaohongshu", model }));
+    expect(new Set(vs.map((v) => v.style.voice)).size).toBe(3);
+    for (const v of vs) {
+      const name = voiceById(v.style.voice)!.name;
+      expect(seen.some((p) => p.includes(`【语言风格：${name}】`))).toBe(true);
+      expect(visualById(v.style.visual)).toBeDefined();
+    }
+  });
+
+  it("指定的风格对全部版本生效；指定语言风格后平台写法里的表情条款让位", async () => {
+    const vs = await generatePostVariants(input({ pack: await pack(), platform: "store_poster", style: { visual: "gallery-dark", voice: "concise-direct" } }));
+    expect(vs.every((v) => v.style.visual === "gallery-dark" && v.style.voice === "concise-direct")).toBe(true);
+    const plain = systemPrompt("xiaohongshu");
+    const styled = systemPrompt("xiaohongshu", undefined, voiceById("professional"));
+    expect(plain).toContain("表情符号点缀");
+    expect(styled).not.toContain("表情符号点缀");
+    expect(styled).toContain("表情符号：不用表情符号");
+    // 海报在任何语气下都不放表情符号
+    expect(systemPrompt("store_poster", undefined, voiceById("playful-light"))).toContain("表情符号：海报不用表情符号");
+    // 事实规则不随风格变化
+    expect(styled).toContain("【事实规则（最重要，违反的句子会被程序删除）】");
   });
 });

@@ -206,3 +206,27 @@ describe("门店推文全流程", () => {
     expect((await s2.get(`/api/marketing/posts/${post.postId}`)).status).toBe(403);
   });
 });
+
+describe("创作风格", () => {
+  it("总部默认视觉风格生效；门店重写时可指定语言风格；未知风格 400", async () => {
+    const { app } = setup();
+    const hq = client(app, await login(app, "hq", "hq-pass-123"));
+    const created = await hq.post("/api/marketing/campaigns", { title: "海报季", products: [{ productId: "mock-air-14" }], theme: "通勤路上轻一点", audience: "上班族", platforms: ["store_poster"], mustAvoid: "不提价格", style: { visual: "gallery-dark" } });
+    expect(created.status).toBe(201);
+    const c = CampaignSchema.parse(created.json);
+    expect(c.style).toEqual({ visual: "gallery-dark" });
+    expect((await hq.post("/api/marketing/campaigns", { ...created.json, style: { voice: "不存在" } })).status).toBe(400);
+
+    const store = client(app, await login(app, "store001", "store-pass-123"));
+    await store.put("/api/marketing/my/profile", PROFILE);
+    const post = PostSchema.parse((await store.post("/api/marketing/posts", { campaignId: c.campaignId, platform: "store_poster" })).json);
+    expect(post.variants.every((v) => v.style?.visual === "gallery-dark")).toBe(true);
+    expect(new Set(post.variants.map((v) => v.style?.voice)).size).toBe(3);
+
+    const again = PostSchema.parse((await store.post(`/api/marketing/posts/${post.postId}/generate`, { voice: "restrained-premium" })).json);
+    expect(again.variants.every((v) => v.style?.voice === "restrained-premium" && v.style.visual === "gallery-dark")).toBe(true);
+    expect((await store.post(`/api/marketing/posts/${post.postId}/generate`, { visual: "不存在" })).status).toBe(400);
+    // 不指定时仍可重新生成（旧客户端发送空对象）
+    expect((await store.post(`/api/marketing/posts/${post.postId}/generate`, {})).status).toBe(200);
+  });
+});

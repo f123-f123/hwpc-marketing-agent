@@ -13,6 +13,7 @@ import {
   MARKETING_PATHS,
   PlatformSchema,
   StoreProfileInputSchema,
+  StyleChoiceSchema,
   SystemSettingsInputSchema,
   ArticleSchema,
   type User,
@@ -150,7 +151,11 @@ export function registerMarketingRoutes(app: Hono, m: MarketingModule, body: Par
     return c.json(await m.service.openPost(u, b.campaignId, b.platform));
   });
   app.get("/api/marketing/posts/:id", (c) => c.json(m.service.getPost(c.req.param("id"), requireUser(c))));
-  app.post("/api/marketing/posts/:id/generate", async (c) => c.json(await m.service.regenerate(c.req.param("id"), requireUser(c))));
+  app.post("/api/marketing/posts/:id/generate", async (c) => {
+    // 可选：本次指定的语言 / 视觉风格；空 body 表示按平台与人群轮换
+    const b = await body(c, StyleChoiceSchema.default({}));
+    return c.json(await m.service.regenerate(c.req.param("id"), requireUser(c), b));
+  });
   app.post("/api/marketing/posts/:id/select", async (c) => {
     const u = requireUser(c);
     const b = await body(c, z.object({ variantId: z.string().min(1) }));

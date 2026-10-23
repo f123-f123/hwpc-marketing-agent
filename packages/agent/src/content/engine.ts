@@ -6,7 +6,7 @@
  * 是否允许生成、能否发布由服务端门控；本模块只负责产出与如实报告。
  */
 import { z } from "zod";
-import type { Article, MaterialPack, ModelService, Platform, StoreProfile, VerificationFinding, VerificationReport } from "@hwpc/contracts";
+import { pickStyles, voiceById, type Article, type MaterialPack, type ModelService, type Platform, type PostStyle, type StoreProfile, type StyleChoice, type VerificationFinding, type VerificationReport } from "@hwpc/contracts";
 import { topicsIn } from "../lexicon.js";
 import { PLATFORM_PLANS } from "../strategy.js";
 import { verifyAndRepair, type VerifyScope } from "../verify.js";
@@ -31,6 +31,8 @@ export interface PostEngineInput {
   round: number;
   /** 角度轮换种子，通常是 storeId + campaignId + platform。 */
   seed: string;
+  /** 指定的语言 / 视觉风格（总部默认或门店选择）；不填的一项按平台与人群为每个版本轮换。 */
+  style?: StyleChoice;
   /** 已配置的真实模型；为空时使用模板稿。 */
   model?: ModelService;
   temperature: number;
@@ -43,6 +45,8 @@ export interface GeneratedVariant {
   report: VerificationReport;
   mode: "model" | "template";
   similarity: number;
+  /** 语言风格进入写作提示词（模板稿不受影响）；视觉风格用于海报与小红书封面。 */
+  style: PostStyle;
 }
 
 const RawBlockSchema = z.object({
@@ -99,7 +103,7 @@ function styleFindings(article: Article, platform: Platform, similarity: number,
   return out;
 }
 
-async function writeOne(inp: PostEngineInput, angle: Angle, index: number): Promise<GeneratedVariant> {
+async function writeOne(inp: PostEngineInput, angle: Angle, style: PostStyle, index: number): Promise<GeneratedVariant> {
   const topics = [...new Set([...angle.topics, ...topicsIn(`${inp.campaign.theme} ${inp.campaign.audience}`)])];
   // 推广任务不指定具体配置：只用适用于全部配置的事实与图片（配置专属的写进去也会被核验删掉，还会带走封面图）
   const forAll = <T extends { productId: string; configurationIds: string[] }>(x: T) => inp.campaign.productIds.includes(x.productId) && x.configurationIds.length === 0;
@@ -114,7 +118,7 @@ async function writeOne(inp: PostEngineInput, angle: Angle, index: number): Prom
     try {
       const res = await inp.model.complete({
         messages: [
-          { role: "system", content: systemPrompt(inp.platform, inp.styleGuide) },
+          { role: "system", content: systemPrompt(inp.platform, inp.styleGuide, voiceById(style.voice)) },
           { role: "user", content: userPrompt({ campaign: inp.campaign, store: inp.store, angle, facts, images, productNames }) },
         ],
         json: true,
@@ -167,10 +171,11 @@ async function writeOne(inp: PostEngineInput, angle: Angle, index: number): Prom
   const findings = [...verified.report.findings, ...styleFindings(article, inp.platform, sim, dropped, extras)];
   if (modelError) findings.push({ findingId: "st-model", kind: "style", severity: "minor", message: `模型调用失败（${modelError}），本版本为模板稿`, factIds: [], imageIds: [], resolution: "flagged" });
 
-  return { angle: angle.label, article, report: { ...verified.report, findings }, mode, similarity: Math.round(sim * 100) / 100 };
+  return { angle: angle.label, article, report: { ...verified.report, findings }, mode, similarity: Math.round(sim * 100) / 100, style };
 }
 
 export async function generatePostVariants(inp: PostEngineInput): Promise<GeneratedVariant[]> {
   const angles = pickAngles({ seed: inp.seed, audience: inp.campaign.audience, theme: inp.campaign.theme, n: inp.count, round: inp.round });
-  return Promise.all(angles.map((a, i) => writeOne(inp, a, i)));
+  const styles = pickStyles({ platform: inp.platform, audience: `${inp.campaign.audience} ${inp.campaign.theme}`, seed: inp.seed, round: inp.round, n: angles.length, choice: inp.style });
+  return Promise.all(angles.map((a, i) => writeOne(inp, a, styles[i]!, i)));
 }

@@ -22,7 +22,8 @@
     "dev:web": "npm run dev -w @hwpc/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "build": "npm run build -w @hwpc/web"
+    "build": "npm run build -w @hwpc/web",
+    "sync:creative": "node scripts/sync-creative.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

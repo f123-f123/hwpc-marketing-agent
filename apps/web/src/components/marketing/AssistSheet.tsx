@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PLATFORM_NAME, type AssistPackage } from "@hwpc/contracts";
+import { PLATFORM_NAME, type AssistPackage, type VisualStyle } from "@hwpc/contracts";
 import { copyText, downloadBlob, downloadUrl, isMobile } from "../../lib/share";
 import { Alert, Icon } from "../ui";
 import { CoverText, renderXhsCover } from "./Previews";
@@ -8,8 +8,10 @@ import { CoverText, renderXhsCover } from "./Previews";
  * 辅助发布：平台没有开放发布接口（或未绑定）时，三步完成发布，再回填链接。
  * 1. 复制文案  2. 保存图片  3. 打开 App 粘贴发布
  */
-export function AssistSheet({ pkg, message, busy, onReceipt, onClose }: {
+export function AssistSheet({ pkg, message, busy, onReceipt, onClose, visual }: {
   pkg: AssistPackage;
+  /** 选定版本的视觉风格：封面图按它的配色与字体生成。 */
+  visual?: VisualStyle;
   message: string;
   busy: boolean;
   onReceipt: (url?: string) => Promise<unknown>;
@@ -37,7 +39,7 @@ export function AssistSheet({ pkg, message, busy, onReceipt, onClose }: {
   const saveCover = async () => {
     setError("");
     try {
-      downloadBlob(await renderXhsCover(pkg.images[0]?.url, pkg.coverText ?? pkg.title), "小红书封面.png");
+      downloadBlob(await renderXhsCover(pkg.images[0]?.url, pkg.coverText ?? pkg.title, visual), "小红书封面.png");
       setCoverSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "封面生成失败");

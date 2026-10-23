@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PLATFORM_NAME, type AssistPackage, type Campaign, type ChannelBindingView, type Platform, type Post } from "@hwpc/contracts";
+import { PLATFORM_NAME, platformStylePool, visualById, voiceById, type AssistPackage, type Campaign, type ChannelBindingView, type Platform, type Post, type StyleChoice } from "@hwpc/contracts";
 import { marketingApi } from "../../api/marketing";
 import { downloadBlob } from "../../lib/share";
 import { useAction } from "../../lib/useLoad";
@@ -41,6 +41,10 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
   const [editing, setEditing] = useState(false);
   const [assist, setAssist] = useState<{ pkg: AssistPackage; message: string } | null>(null);
   const [notice, setNotice] = useState("");
+  const [style, setStyle] = useState<StyleChoice>({});
+  const pool = platformStylePool(platform);
+  /** 视觉风格只影响海报和小红书封面，其他平台不显示视觉选项。 */
+  const visualMatters = platform === "store_poster" || platform === "xiaohongshu";
   const action = useAction(auth.handleError);
   const img = (imageId: string) => (post ? marketingApi.imageUrl(post.postId, imageId) : "");
 
@@ -69,6 +73,7 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
   }
 
   const selected = post.variants.find((v) => v.variantId === post.selectedVariantId);
+  const selectedVisual = visualById(selected?.style?.visual);
   const current = post.edited ?? (selected ? { article: selected.article, report: selected.report } : undefined);
   const lastPublish = post.publishes.at(-1);
 
@@ -76,7 +81,7 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
     action.run(async () => {
       if (!current) return;
       if (platform === "store_poster") {
-        downloadBlob(await renderPosterPng(current.article, img), `${campaign.title}-${storeName}-海报.png`);
+        downloadBlob(await renderPosterPng(current.article, img, selectedVisual), `${campaign.title}-${storeName}-海报.png`);
       }
       const r = await marketingApi.publish(post.postId);
       update(r.post);
@@ -93,9 +98,27 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
       <section aria-label="候选版本">
         <div className="post-bar">
           <h3 className="subhead-inline">挑一个版本</h3>
-          <button type="button" className="btn btn-sm" disabled={action.busy || post.status === "published"} onClick={() => void action.run(async () => update(await marketingApi.regenerate(post.postId)))}>
-            {action.busy ? "生成中…" : "换一批角度"}
-          </button>
+          <span className="row style-pick">
+            <label className="style-select">
+              <span>语言风格</span>
+              <select className="input" value={style.voice ?? ""} onChange={(e) => setStyle((s) => ({ ...s, voice: e.target.value || undefined }))}>
+                <option value="">自动搭配</option>
+                {pool.voices.map((id) => <option key={id} value={id}>{voiceById(id)?.name}</option>)}
+              </select>
+            </label>
+            {visualMatters && (
+              <label className="style-select">
+                <span>视觉风格</span>
+                <select className="input" value={style.visual ?? ""} onChange={(e) => setStyle((s) => ({ ...s, visual: e.target.value || undefined }))}>
+                  <option value="">自动搭配</option>
+                  {pool.visuals.map((id) => <option key={id} value={id}>{visualById(id)?.name}</option>)}
+                </select>
+              </label>
+            )}
+            <button type="button" className="btn btn-sm" disabled={action.busy || post.status === "published"} onClick={() => void action.run(async () => update(await marketingApi.regenerate(post.postId, style)))}>
+              {action.busy ? "生成中…" : style.voice || style.visual ? "按所选风格重写" : "换一批角度"}
+            </button>
+          </span>
         </div>
         <div className="variants">
           {post.variants.map((v) => {
@@ -103,7 +126,15 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
             return (
               <article key={v.variantId} className={`variant${on ? " is-selected" : ""}`}>
                 <header className="variant-head">
-                  <strong>{v.angle}</strong>
+                  <span className="variant-title">
+                    <strong>{v.angle}</strong>
+                    {v.style && (
+                      <span className="variant-style">
+                        {voiceById(v.style.voice)?.name}
+                        {visualMatters && <> · {visualById(v.style.visual)?.name}</>}
+                      </span>
+                    )}
+                  </span>
                   <span className="row">
                     <Badge tone={DELIVERY_TONE[v.report.deliveryStatus] ?? "neutral"}>{DELIVERY_LABEL[v.report.deliveryStatus]}</Badge>
                     {v.mode === "template" && <Badge tone="warning">模板稿</Badge>}
@@ -111,7 +142,7 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
                   </span>
                 </header>
                 <div className="variant-preview">
-                  <Preview platform={platform} article={v.article} img={img} storeName={storeName} />
+                  <Preview platform={platform} article={v.article} img={img} storeName={storeName} visual={visualById(v.style?.visual)} />
                 </div>
                 <button
                   type="button"
@@ -149,7 +180,7 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
                   onSave={(a) => action.run(async () => { update(await marketingApi.edit(post.postId, a)); setEditing(false); })}
                 />
               ) : (
-                <Preview platform={platform} article={current.article} img={img} storeName={storeName} />
+                <Preview platform={platform} article={current.article} img={img} storeName={storeName} visual={selectedVisual} />
               )}
             </div>
             <div className="chosen-side">
@@ -186,6 +217,7 @@ export function PostPanel({ auth, campaign, platform, initial, channels, storeNa
           pkg={assist.pkg}
           message={assist.message}
           busy={action.busy}
+          visual={selectedVisual}
           onClose={() => setAssist(null)}
           onReceipt={(url) => action.run(async () => { update(await marketingApi.receipt(post.postId, url)); return true; })}
         />
