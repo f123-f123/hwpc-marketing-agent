@@ -4,13 +4,13 @@ import { createDataService, createDeviceKnowledgeService, createLocalLibrary } f
 import { createMockAdvisorEngine, createMockKnowledgeService, createMockQaEngine, mockSceneDefinitions } from "@hwpc/fixtures";
 import { registeredSceneDefinitions } from "@hwpc/scenes";
 import { createApp } from "./app.js";
-import { loadConfig, maskSecret } from "./config.js";
+import { loadConfig, maskSecret, proxyStatus } from "./config.js";
 import { createModelService } from "./model.js";
 import { TaskManager } from "./tasks.js";
 import { SessionManager } from "./sessions.js";
 import { FileSessionStore } from "./store.js";
 import { libraryImageProvider, webImageProvider } from "./page/providers.js";
-import { createWebSearch, OFFICIAL_DOMAINS } from "./web/search.js";
+import { createWebSearch, OFFICIAL_DOMAINS, webSearchProblem } from "./web/search.js";
 import { SceneRegistry } from "./registry.js";
 import { AuthService } from "./marketing/auth.js";
 import { MarketingRepo } from "./marketing/repo.js";
@@ -90,6 +90,7 @@ const app = createApp({ data, model, tasks: new TaskManager(workflow), sessions,
 // 推文模块已有登录鉴权；选购顾问（/api/sessions）仍无鉴权，因此只绑定本机回环地址。公网部署前需补齐访问控制、限流与 HTTPS。
 serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, (info) => {
   console.log(`[server] http://127.0.0.1:${info.port}  dataMode=${cfg.dataMode}  activeDataOrigin=${dataOrigin}`);
+  console.log(`[server] 出站代理: ${proxyStatus}`);
   console.log(`[server] ima 凭证: ${cfg.ima.clientId ? `ClientID ${maskSecret(cfg.ima.clientId)}` : "未设置"}；模型: ${cfg.model.name ?? "未配置"}`);
   console.log(`[server] 知识库检索: ${libraryStatus.message}`);
   console.log(
@@ -97,7 +98,7 @@ serve({ fetch: app.fetch, port: cfg.port, hostname: "127.0.0.1" }, (info) => {
       ? `[server] 顾问 / 答疑引擎: 知识库引擎（${settings.view().model.source === "none" ? "规则模式；在总部「系统设置」配置大模型后自动启用改写" : "已配置大模型，回复由模型改写并经数字核验"}）`
       : "[server] 顾问 / 答疑引擎: 模拟引擎（mock 模式或知识库不可读，isMock=true），界面会标注模拟。",
   );
-  console.log(`[server] 联网检索: ${web ? `已启用（${web.provider}），用于体验页补图` : "未配置（WEB_SEARCH_PROVIDER / WEB_SEARCH_API_KEY），只用本地知识库"}`);
+  console.log(`[server] 联网检索: ${web ? `已启用（${web.provider}），用于体验页补图与答疑参考` : `${webSearchProblem(cfg.webSearch)}，只用本地知识库`}`);
   for (const s of statuses) console.log(`[server] 资料源 ${s.origin}: ${s.state} — ${s.message}`);
   if (master.generated) console.warn(`[server] 未设置 AUTH_SECRET，已生成主密钥 ${path.join(marketingDir, "master.key")}；公网部署请显式设置 AUTH_SECRET`);
   if (seeded.length) console.warn(`[server] 已创建初始账号：${seeded.join("、")}，口令见 .env 的 HQ_INITIAL_PASSWORD / STORE_INITIAL_PASSWORD（默认 hq123456 / store123456），登录后请立即修改`);

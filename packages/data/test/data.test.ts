@@ -3,6 +3,7 @@ import { MaterialPackSchema, DeviceKnowledgeSnapshotSchema } from "@hwpc/contrac
 import { createDataService, createDeviceKnowledgeService } from "../src/index.js";
 import { createImaDataService } from "../src/ima.js";
 import { createLocalDataService, defaultLocalRoot } from "../src/local.js";
+import { createLocalDataService as createLocalCatalog } from "../src/local/index.js";
 
 const service = createDataService({ mode: "auto", ima: { kbName: "指定知识库" } });
 
@@ -57,8 +58,43 @@ describe("ima 协议模拟", () => {
       expect(product.origin).toBe("ima");
       const pack = await ima.getMaterialPack({ taskId: "test-task", product: { productId: product.productId } });
       expect(pack.origins).toEqual(["ima"]);
-      expect(pack.facts.some(f => f.value === "HarmonyOS 6.1" && f.source.locator === "facts")).toBe(true);
+      expect(pack.facts.some(f => f.value === "HarmonyOS 6.1" && f.source.locator === "HUAWEI MateBook Pro/产品事实.md")).toBe(true);
       expect(fake.mock.calls.some(call => String(call[0]).endsWith("get_knowledge_list"))).toBe(true);
+    } finally { vi.stubGlobal("fetch", original); }
+  });
+});
+
+describe("auto 模式按来源分发", () => {
+  it("ima 已连接时，本地型号的任务与本地图片仍走本地，不送去 ima", async () => {
+    const original = globalThis.fetch;
+    const fake = vi.fn(async (url: string | URL | Request) => {
+      const method = String(url).split("/").at(-1);
+      const data = method === "search_knowledge_base" ? { info_list: [{ kb_id: "kb", kb_name: "指定知识库" }], is_end: true } : { knowledge_list: [], info_list: [], is_end: true };
+      return new Response(JSON.stringify({ code: 0, msg: "success", data }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fake);
+    try {
+      const auto = createDataService({ mode: "auto", ima: { clientId: "c", apiKey: "k", kbName: "指定知识库" } });
+      const localProduct = (await createLocalCatalog({ rootDir: defaultLocalRoot() }).searchProducts("HUAWEI MateBook 14（鸿蒙版）")).candidates[0]!;
+      const pack = await auto.getMaterialPack({ taskId: "t", product: { productId: localProduct.productId } });
+      expect(pack.origins).toEqual(["local"]);
+      const image = await auto.readImage(pack.images[0]!);
+      expect(image.mimeType).toMatch(/^image\//);
+      expect(fake.mock.calls.some(c => /get_media_info|search_knowledge$/.test(String(c[0])))).toBe(false);
+    } finally { vi.stubGlobal("fetch", original); }
+  });
+});
+
+describe("local 模式不消耗 ima 调用", () => {
+  it("即使配置了 ima 凭证，local 模式的状态检查也不请求 ima", async () => {
+    const original = globalThis.fetch;
+    const fake = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fake);
+    try {
+      const svc = createDataService({ mode: "local", ima: { clientId: "c", apiKey: "k", kbName: "指定知识库" } });
+      const status = await svc.getStatus();
+      expect(status.find((s) => s.origin === "ima")?.message).toMatch(/未启用/);
+      expect(fake).not.toHaveBeenCalled();
     } finally { vi.stubGlobal("fetch", original); }
   });
 });

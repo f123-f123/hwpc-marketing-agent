@@ -14,14 +14,14 @@ import type { DataService, DeviceKnowledgeService, SourceStatus } from "@hwpc/co
 import { DataServiceError } from "@hwpc/contracts";
 import { createMockDataService } from "@hwpc/fixtures";
 import { createLocalDataService } from "./local/index.js";
-import { createImaDataService } from "./ima.js";
+import { createImaDataService, type ImaConfig } from "./ima.js";
 import { defaultLocalRoot } from "./local.js";
 import { createKnowledgeService } from "./devices.js";
 
 export interface DataServiceConfig {
   mode: "auto" | "mock" | "local" | "ima";
   localKbDir?: string;
-  ima: { clientId?: string; apiKey?: string; kbName: string };
+  ima: ImaConfig;
 }
 
 export function createDataService(config: DataServiceConfig): DataService {
@@ -44,7 +44,11 @@ export function createDataService(config: DataServiceConfig): DataService {
 
   return {
     async getStatus(signal) {
-      const settled = await Promise.allSettled([ima.getStatus(signal), local.getStatus(signal)]);
+      // local / mock 模式不查询 ima：共享知识库调用次数有限，不为状态展示消耗
+      const imaStatus = config.mode === "auto" || config.mode === "ima"
+        ? ima.getStatus(signal)
+        : Promise.resolve<SourceStatus[]>([{ origin: "ima", state: "not_configured", enabled: false, message: `未启用（DATA_SOURCE_MODE=${config.mode}）`, knowledgeBase: { name: config.ima.kbName, found: false } }]);
+      const settled = await Promise.allSettled([imaStatus, local.getStatus(signal)]);
       const statuses: SourceStatus[] = settled.flatMap((result, i) =>
         result.status === "fulfilled"
           ? result.value
@@ -70,12 +74,15 @@ export function createDataService(config: DataServiceConfig): DataService {
       return (await pick(signal)).searchProducts(query, signal);
     },
     async getMaterialPack(request) {
+      // auto 下按型号来源分发：ima 接入前创建的任务仍是本地型号，继续读本地资料（资料包标记 local），不送去 ima
+      if (config.mode === "auto") return (request.product.productId.startsWith("ima-") ? ima : local).getMaterialPack(request);
       return (await pick(request.signal)).getMaterialPack(request);
     },
     async readImage(image, signal) {
+      // 图片按自身来源读取，与当前活动来源无关
       if (image.source.origin === "mock") return mock.readImage(image, signal);
-      const active = await pick(signal);
-      return active.readImage(image, signal);
+      if (config.mode === "auto") return (image.source.origin === "ima" ? ima : local).readImage(image, signal);
+      return (await pick(signal)).readImage(image, signal);
     },
   };
 }

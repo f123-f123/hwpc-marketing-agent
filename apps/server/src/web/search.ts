@@ -1,7 +1,8 @@
 /**
  * 联网检索（可选）。用于体验页补图、答疑在知识库找不到依据时补充参考。
  *
- * 当前接入 Tavily 搜索 API（https://docs.tavily.com）：设置 WEB_SEARCH_PROVIDER=tavily 与 WEB_SEARCH_API_KEY 后启用。
+ * 当前接入 Tavily 搜索 API（https://docs.tavily.com）：设置 WEB_SEARCH_API_KEY 后启用（WEB_SEARCH_PROVIDER 默认 tavily）。
+ * WEB_SEARCH_BASE_URL 可改为代理或兼容 Tavily 请求格式的自建地址：填到 /search 为止，或只填根地址（自动补 /search）。
  * 未配置时返回 undefined，调用方只用本地知识库，界面不会出现“联网”来源。
  * 联网结果不进入事实库：图片标注“官网”或“网页”，文字只作为“仅供参考”的引用。
  */
@@ -35,15 +36,33 @@ export const isOfficialUrl = (url: string): boolean => {
   }
 };
 
+export const DEFAULT_TAVILY_URL = "https://api.tavily.com/search";
+
+/** 检查联网检索配置；返回 undefined 表示可用，否则是不能启用的原因（用于启动日志）。 */
+export function webSearchProblem(cfg: ServerConfig["webSearch"]): string | undefined {
+  const provider = (cfg.provider ?? "tavily").toLowerCase();
+  if (!cfg.apiKey) return cfg.baseUrl ? "已设置 WEB_SEARCH_BASE_URL，但缺少 WEB_SEARCH_API_KEY" : "未配置（WEB_SEARCH_API_KEY 为空）";
+  if (provider !== "tavily") return `不支持的 WEB_SEARCH_PROVIDER=${cfg.provider}（目前只支持 tavily 及兼容其请求格式的地址）`;
+  if (cfg.baseUrl && !/^https?:\/\/[^/]+/i.test(cfg.baseUrl)) return `WEB_SEARCH_BASE_URL 不是 http(s) 地址：${cfg.baseUrl}`;
+  return undefined;
+}
+
+export function searchEndpoint(baseUrl?: string): string {
+  if (!baseUrl) return DEFAULT_TAVILY_URL;
+  const url = baseUrl.trim().replace(/\/+$/, "");
+  return /\/search$/i.test(url) ? url : `${url}/search`;
+}
+
 export function createWebSearch(cfg: ServerConfig["webSearch"]): WebSearch | undefined {
-  if (cfg.provider !== "tavily" || !cfg.apiKey) return undefined;
-  const key = cfg.apiKey;
+  if (webSearchProblem(cfg)) return undefined;
+  const key = cfg.apiKey!;
+  const endpoint = searchEndpoint(cfg.baseUrl);
   return {
-    provider: "tavily",
+    provider: cfg.baseUrl ? `tavily @ ${new URL(endpoint).host}` : "tavily",
     async search(query, opts = {}) {
       const timeout = AbortSignal.timeout(cfg.timeoutMs);
       const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-      const res = await fetch("https://api.tavily.com/search", {
+      const res = await fetch(endpoint, {
         method: "POST",
         signal,
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },

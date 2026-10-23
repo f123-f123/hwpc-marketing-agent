@@ -122,27 +122,40 @@ export function csvRows(text: string): string[][] {
   return rows;
 }
 
-export function parseImages(csv: string, product: ProductIdentity, sourcePath: string, root: string): ImageRecord[] {
+/** 图片索引.csv 中属于该型号的一行（本地与 ima 共用）。 */
+export interface ImageIndexRow { file: string; description: string; usageNote?: string; officialUrl?: string; width?: number; height?: number }
+
+export function imageIndexRows(csv: string, model: string): ImageIndexRow[] {
   const rows = csvRows(csv);
   const head = rows.shift() ?? [];
   if (head[0]) head[0] = head[0].replace(/^\uFEFF/, "");
   const col = (row: string[], name: string) => row[head.indexOf(name)]?.trim() ?? "";
   return rows.flatMap(row => {
     const file = col(row, "文件名");
-    const model = col(row, "产品型号");
-    if (!file || normalized(model) !== normalized(product.model)) return [];
-    const localPath = path.join(path.dirname(sourcePath), "images", file);
-    const src: SourceRef = { origin: "local", title: `${product.model} 图片索引`, locator: path.relative(root, sourcePath).replaceAll("\\", "/") };
+    if (!file || normalized(col(row, "产品型号")) !== normalized(model)) return [];
     const url = col(row, "原始图片URL") || col(row, "来源页面");
-    if (url.startsWith("https://")) src.officialUrl = url;
     return [{
-      imageId: stableId("image", `${src.locator}:${file}`), productId: product.productId, configurationIds: [],
-      role: /主视觉/.test(file) ? "hero" as const : /接口/.test(file) ? "ports" as const : /场景/.test(file) ? "scene" as const : "detail" as const,
-      description: col(row, "官网图片说明") || file, usageNote: col(row, "建议用途") || undefined,
-      source: src, access: { kind: "local_file" as const, path: localPath },
-      mimeType: /\.png$/i.test(file) ? "image/png" : "image/jpeg",
+      file, description: col(row, "官网图片说明") || file, usageNote: col(row, "建议用途") || undefined,
+      officialUrl: url.startsWith("https://") ? url : undefined,
       width: Number(col(row, "宽度")) || undefined, height: Number(col(row, "高度")) || undefined,
     }];
+  });
+}
+
+export const imageRole = (file: string): ImageRecord["role"] =>
+  /主视觉/.test(file) ? "hero" : /接口/.test(file) ? "ports" : /场景/.test(file) ? "scene" : "detail";
+
+export function parseImages(csv: string, product: ProductIdentity, sourcePath: string, root: string): ImageRecord[] {
+  return imageIndexRows(csv, product.model).map(row => {
+    const src: SourceRef = { origin: "local", title: `${product.model} 图片索引`, locator: path.relative(root, sourcePath).replaceAll("\\", "/") };
+    if (row.officialUrl) src.officialUrl = row.officialUrl;
+    return {
+      imageId: stableId("image", `${src.locator}:${row.file}`), productId: product.productId, configurationIds: [],
+      role: imageRole(row.file), description: row.description, usageNote: row.usageNote,
+      source: src, access: { kind: "local_file" as const, path: path.join(path.dirname(sourcePath), "images", row.file) },
+      mimeType: /\.png$/i.test(row.file) ? "image/png" : "image/jpeg",
+      width: row.width, height: row.height,
+    };
   });
 }
 
