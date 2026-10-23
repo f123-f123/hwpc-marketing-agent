@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import { COMPLETION_LABEL, ENTRY_STATUS_LABEL } from "../../lib/labels";
 import { KEYS, readJson, writeJson } from "../../lib/storage";
 import { DEFAULT_VIEW, Panorama, isView, type View } from "../../scenes/Panorama";
+import { STAGE_TEASER } from "../../scenes/stages";
 import { Badge, Icon } from "../ui";
 import { SLOT_ORIGIN_LABEL, SlotImage } from "./SlotImage";
 
@@ -200,12 +201,30 @@ export function ExperienceSection({ s, snap, onEnterScene, onOpenInstance, onAct
           </ol>
         )}
         {others.length > 0 && (
-          <p className="ip-more" data-reveal>
-            也可以看看通用演示：
-            {others.map((c, i) => (
-              <span key={c.sceneId}>{i > 0 && "、"}<button type="button" className="link" onClick={() => onEnterScene(c.sceneId)}>{c.title}</button></span>
-            ))}
-          </p>
+          <div className="ip-more" data-reveal>
+            <h3 className="ip-more-title">还可以上手试试</h3>
+            <ul className="ip-demos">
+              {others.map((c) => {
+                const t = STAGE_TEASER[c.sceneId];
+                return (
+                  <li key={c.sceneId}>
+                    <button type="button" className="ip-demo" onClick={() => onEnterScene(c.sceneId)}>
+                      <span className="ip-demo-icon"><Icon name={t?.icon ?? "spark"} size={22} /></span>
+                      <span className="ip-demo-main">
+                        <strong>
+                          {c.title.replace(/^【MOCK】/, "")}
+                          {c.isMock && <Badge tone="warning">模拟资料</Badge>}
+                          {doneIds.includes(c.sceneId) && <Badge tone="success">已体验</Badge>}
+                        </strong>
+                        <span>{t?.doing ?? c.summary}</span>
+                      </span>
+                      <Icon name="right" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </div>
     </section>

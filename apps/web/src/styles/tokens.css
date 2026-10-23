@@ -155,6 +155,22 @@
   --sim-app-f: linear-gradient(140deg, #ffe58a, #f5c64a);
   --sim-app-g: linear-gradient(140deg, #ff7aa8, #d9467d);
   --sim-app-h: linear-gradient(140deg, #6fb7ff, #3a7be0);
+  --sim-warn: #c77700;
+  --sim-bad: #c7000b;
+  /* 通勤一天：不同地点的墙面与地面 */
+  --sim-home-wall: linear-gradient(#f3ece2, #e7dccb);
+  --sim-home-floor: linear-gradient(#c9ad8a, #a88b67);
+  --sim-office-wall: linear-gradient(#e9edf2, #d8dee6);
+  --sim-office-floor: linear-gradient(#b9bec6, #959ba5);
+  --sim-cafe-wall: linear-gradient(#efe1cf, #dcc4a6);
+  --sim-cafe-floor: linear-gradient(#8a6243, #6b4a32);
+  --sim-dusk: linear-gradient(170deg, #f6c79a 0%, #c98e9a 45%, #4a4775 100%);
+  --sim-metro: linear-gradient(#5b6573, #3a414c);
+  --sim-road: linear-gradient(#cfd8e2 0 46%, #5d636b 46% 100%);
+  --sim-skyline: #2b3446;
+  --sim-board: #fbfcfd;
+  --sim-bag: #36404f;
+  --sim-bag-hi: #4a5668;
 }
 
 /* 动效只用于状态反馈；尊重系统的减少动态偏好 */
