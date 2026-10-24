@@ -100,6 +100,30 @@ export interface LibraryStatus {
   prices: number;
 }
 
+/** 知识库里的一份文档（一个 Markdown 文件），供资料库浏览。 */
+export const LibraryDocSchema = z.object({
+  docId: IdSchema,
+  section: LibrarySectionSchema,
+  title: z.string().min(1),
+  /** 文档里的小节标题，按出现顺序。 */
+  headings: z.array(z.string()).default([]),
+  productIds: z.array(IdSchema).default([]),
+  source: SourceRefSchema,
+});
+export type LibraryDoc = z.infer<typeof LibraryDocSchema>;
+
+/** 文档全文（按小节，原文不改写；已去掉注释与出处列表等噪声）。 */
+export const LibraryDocContentSchema = LibraryDocSchema.extend({
+  parts: z.array(z.object({ heading: z.string().optional(), text: z.string() })),
+});
+export type LibraryDocContent = z.infer<typeof LibraryDocContentSchema>;
+
+export interface LibraryDocQuery {
+  /** 只要这个型号的文档（卖点与限制、检索卡、型号话术）。 */
+  productId?: string;
+  sections?: LibrarySection[];
+}
+
 export interface LibraryImageQuery {
   productId?: string;
   /** 画面关键词，如“移动办公”“会议”“外观”。 */
@@ -118,6 +142,10 @@ export interface KnowledgeLibrary {
   images(query: LibraryImageQuery): Promise<ImageRecord[]>;
   /** 只读取索引里登记过的图片。 */
   readImage(imageId: string, signal?: AbortSignal): Promise<ImageContent & { image: ImageRecord }>;
+  /** 索引里登记过的文档清单（按型号或资料类别过滤）。 */
+  documents(query?: LibraryDocQuery): Promise<LibraryDoc[]>;
+  /** 读取一份已索引文档的全文；不在索引里的返回 undefined。 */
+  document(docId: string): Promise<LibraryDocContent | undefined>;
 }
 
 /** 场景/营销图不绑定型号时使用的 productId。 */

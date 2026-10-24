@@ -20,13 +20,16 @@ import {
   type UserRole,
 } from "@hwpc/contracts";
 import { AuthError, type AuthService } from "./auth.js";
-import type { MarketingService } from "./service.js";
+import type { CatalogService } from "./catalog.js";
+import { MarketingError, type MarketingService } from "./service.js";
 import type { SettingsService } from "./settings.js";
 
 export interface MarketingModule {
   auth: AuthService;
   service: MarketingService;
   settings: SettingsService;
+  /** 资料库（导购查看型号与资料）；没有时接口返回 404。 */
+  catalog?: CatalogService;
   /** 生产环境（HTTPS）下设置 Cookie 的 Secure 属性。 */
   secureCookie: boolean;
 }
@@ -77,6 +80,28 @@ export function registerMarketingRoutes(app: Hono, m: MarketingModule, body: Par
   app.get(MARKETING_PATHS.products, async (c) => {
     requireUser(c);
     return c.json(await m.service.products());
+  });
+
+  /* ---------- 资料库：门店与总部都能看 ---------- */
+  const catalog = () => {
+    if (!m.catalog) throw new MarketingError("not_found", "资料库未启用");
+    return m.catalog;
+  };
+  app.get(MARKETING_PATHS.catalog, async (c) => {
+    requireUser(c);
+    return c.json(await catalog().overview());
+  });
+  app.get("/api/marketing/catalog/products/:id", async (c) => {
+    requireUser(c);
+    return c.json(await catalog().product(c.req.param("id")));
+  });
+  app.get("/api/marketing/catalog/search", async (c) => {
+    requireUser(c);
+    return c.json(await catalog().search(c.req.query("q") ?? ""));
+  });
+  app.get("/api/marketing/catalog/docs/:id", async (c) => {
+    requireUser(c);
+    return c.json(await catalog().doc(c.req.param("id")));
   });
 
   /* ---------- 总部 ---------- */

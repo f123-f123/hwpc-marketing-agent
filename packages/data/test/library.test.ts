@@ -70,4 +70,19 @@ describe.skipIf(!existsSync(defaultLocalRoot()))("本地知识库检索（真实
     const prices = await lib.prices(anyProduct.productId);
     for (const p of prices) expect(p.productId).toBe(anyProduct.productId);
   });
+
+  it("按型号列出文档，按编号读全文；不在索引里的文档读不到", async () => {
+    const anyProduct = (await lib.images({ limit: 200 })).find((i) => i.productId !== "kb-scene")!;
+    const docs = await lib.documents({ productId: anyProduct.productId });
+    expect(docs.some((d) => d.section === "selling")).toBe(true);
+    expect(docs.some((d) => d.section === "role_script")).toBe(true);
+    for (const d of docs) expect(d.productIds).toContain(anyProduct.productId);
+    const faq = await lib.documents({ sections: ["faq"] });
+    expect(faq.length).toBeGreaterThan(5);
+    expect(faq.every((d) => d.productIds.length === 0)).toBe(true);
+    const full = await lib.document(docs[0]!.docId);
+    expect(full?.parts.length).toBeGreaterThan(0);
+    expect(full?.source.locator).toBe(docs[0]!.source.locator);
+    expect(await lib.document("doc-not-exist")).toBeUndefined();
+  });
 });

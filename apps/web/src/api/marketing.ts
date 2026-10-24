@@ -1,4 +1,8 @@
 import {
+  CatalogDetailSchema,
+  CatalogOverviewSchema,
+  CatalogSearchHitSchema,
+  LibraryDocContentSchema,
   CampaignProgressSchema,
   CampaignSchema,
   ChannelBindingViewSchema,
@@ -41,6 +45,14 @@ export const marketingApi = {
   changePassword: (oldPassword: string, newPassword: string) => call("/api/auth/password", ok, { oldPassword, newPassword }),
 
   products: () => call(MARKETING_PATHS.products, productsSchema),
+
+  // 资料库（门店与总部都能看）
+  catalog: () => call(MARKETING_PATHS.catalog, CatalogOverviewSchema),
+  catalogProduct: (id: string) => call(MARKETING_PATHS.catalogProduct(id), CatalogDetailSchema),
+  catalogDoc: (id: string) => call(MARKETING_PATHS.catalogDoc(id), LibraryDocContentSchema),
+  catalogSearch: (q: string) => call(MARKETING_PATHS.catalogSearch(q), CatalogSearchHitSchema.array()),
+  /** 知识库图片（服务端只读索引里登记过的文件）。 */
+  libraryImage: (imageId: string) => `/api/library/images/${encodeURIComponent(imageId)}`,
 
   // 总部
   campaigns: () => call(MARKETING_PATHS.campaigns, CampaignSchema.array()),

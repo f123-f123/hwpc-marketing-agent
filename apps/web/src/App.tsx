@@ -14,6 +14,8 @@ import { CampaignWorkbench } from "./components/marketing/CampaignWorkbench";
 import { HqCampaigns, HqProgress } from "./components/marketing/HqCampaigns";
 import { HqSettings } from "./components/marketing/HqSettings";
 import { LoginPage } from "./components/marketing/LoginPage";
+import { LibraryHome } from "./components/library/LibraryHome";
+import { LibraryProduct } from "./components/library/LibraryProduct";
 import { StoreHome } from "./components/marketing/StoreHome";
 import { StoreSettings } from "./components/marketing/StoreSettings";
 import { Badge, EmptyState, Icon } from "./components/ui";
@@ -22,7 +24,7 @@ import { href, useRoute } from "./lib/router";
 import { useAuth, type Auth } from "./state/useAuth";
 import { useBackendStatus, useSession } from "./state/useSession";
 
-function Topbar({ section, user, onLogout, children }: { section: "advisor" | "posts" | "settings"; user: User | null; onLogout: () => void; children?: ReactNode }) {
+function Topbar({ section, user, onLogout, children }: { section: "advisor" | "posts" | "library" | "settings"; user: User | null; onLogout: () => void; children?: ReactNode }) {
   const postsHref = user?.role === "hq" ? href("hq") : href("posts");
   return (
     <header className="topbar">
@@ -34,6 +36,7 @@ function Topbar({ section, user, onLogout, children }: { section: "advisor" | "p
       <nav className="topnav" aria-label="模块">
         <a href={href("advisor")} aria-current={section === "advisor" ? "page" : undefined}>选购顾问</a>
         <a href={postsHref} aria-current={section === "posts" ? "page" : undefined}>{user?.role === "hq" ? "推广任务" : "推文发布"}</a>
+        {user && <a href={href("library")} aria-current={section === "library" ? "page" : undefined}>资料库</a>}
         {user && <a href={href("settings")} aria-current={section === "settings" ? "page" : undefined}>设置</a>}
       </nav>
       <span className="spacer" />
@@ -111,7 +114,7 @@ function Advisor({ auth }: { auth: Auth }) {
 
 /** 推文模块：先登录，再按角色进入门店或总部页面。 */
 function Marketing({ auth, route }: { auth: Auth; route: string[] }) {
-  const section = route[0] === "settings" ? "settings" : "posts";
+  const section = route[0] === "settings" ? "settings" : route[0] === "library" ? "library" : "posts";
   const top = <Topbar section={section} user={auth.user} onLogout={() => void auth.logout()} />;
   if (auth.checking) return <>{top}<div className="loading"><div className="skeleton skeleton-block" /></div></>;
   if (!auth.user) return <>{top}<LoginPage auth={auth} /></>;
@@ -119,6 +122,7 @@ function Marketing({ auth, route }: { auth: Auth; route: string[] }) {
   const user = auth.user;
   let page: ReactNode;
   if (route[0] === "settings") page = user.role === "hq" ? <HqSettings auth={auth} /> : <StoreSettings auth={auth} />;
+  else if (route[0] === "library") page = route[1] ? <LibraryProduct key={route[1]} auth={auth} productId={route[1]} /> : <LibraryHome auth={auth} />;
   else if (user.role === "hq") {
     if (route[0] === "hq" && route[1] === "campaigns" && route[2]) page = <HqProgress auth={auth} campaignId={route[2]} />;
     else if (route[0] === "hq" && route[1] === "stores") page = <HqSettings auth={auth} />;
@@ -132,6 +136,6 @@ function Marketing({ auth, route }: { auth: Auth; route: string[] }) {
 export function App() {
   const route = useRoute();
   const auth = useAuth();
-  const isMarketing = route[0] === "posts" || route[0] === "hq" || route[0] === "settings";
+  const isMarketing = route[0] === "posts" || route[0] === "hq" || route[0] === "settings" || route[0] === "library";
   return <div className="app">{isMarketing ? <Marketing auth={auth} route={route} /> : <Advisor auth={auth} />}</div>;
 }

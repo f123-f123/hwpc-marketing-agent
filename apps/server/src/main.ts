@@ -15,6 +15,7 @@ import { SceneRegistry } from "./registry.js";
 import { AuthService } from "./marketing/auth.js";
 import { MarketingRepo } from "./marketing/repo.js";
 import { loadMasterSecret, SecretBox, TokenSigner } from "./marketing/security.js";
+import { CatalogService } from "./marketing/catalog.js";
 import { MarketingService } from "./marketing/service.js";
 import { SettingsService } from "./marketing/settings.js";
 import path from "node:path";
@@ -82,6 +83,11 @@ const marketing = {
   auth,
   settings,
   service: new MarketingService({ repo: marketingRepo, data, settings, box, ...(cfg.localKbDir ? { localKbDir: cfg.localKbDir } : {}) }),
+  // 资料库给导购浏览整库：有本地知识库副本时固定读本地——型号编号与价格、检索卡、图片、文档的登记一致，
+  // 也不消耗 ima 调用次数（ima 的型号编号与本地不同，对不上本地索引）。没有本地副本时只用当前资料服务。
+  catalog: realEngines
+    ? new CatalogService({ data: createDataService({ mode: "local", ...(cfg.localKbDir ? { localKbDir: cfg.localKbDir } : {}), ima: cfg.ima }), library })
+    : new CatalogService({ data }),
   secureCookie: cfg.auth.secureCookie,
 };
 

@@ -24,6 +24,7 @@ export * from "./needsLogic.js";
 export * from "./page.js";
 export * from "./qa.js";
 export * from "./library.js";
+export * from "./catalog.js";
 export * from "./session.js";
 export * from "./recovery.js";
 export * from "./api.js";

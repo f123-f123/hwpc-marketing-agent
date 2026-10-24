@@ -7,6 +7,7 @@ import "./styles/app.css";
 import "./styles/scenes.css";
 import "./styles/page.css";
 import "./styles/marketing.css";
+import "./styles/library.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -15,6 +15,8 @@ import {
   type ImageRecord,
   type ImageRole,
   type KnowledgeLibrary,
+  type LibraryDoc,
+  type LibraryDocContent,
   type LibraryHit,
   type LibrarySection,
   type LibraryStatus,
@@ -277,6 +279,8 @@ interface Index {
   prices: PriceRecord[];
   briefs: Map<string, ProductBrief>;
   images: ImageRecord[];
+  /** 按文件登记的文档（资料库浏览用），保持索引顺序。 */
+  documents: Map<string, LibraryDocContent>;
 }
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -317,6 +321,7 @@ export function createLocalLibrary(rootDir?: string): KnowledgeLibrary {
 
     const chunks: Chunk[] = [];
     const df = new Map<string, number>();
+    const documents = new Map<string, LibraryDocContent>();
     let docs = 0;
     for (const { file, section, productIds } of files) {
       let md: string;
@@ -328,6 +333,20 @@ export function createLocalLibrary(rootDir?: string): KnowledgeLibrary {
       docs++;
       const locator = path.relative(root, file).replaceAll("\\", "/");
       const parts = chunkMarkdown(md);
+      const kept = parts.filter((part) => !isNoiseChunk(part.heading, part.text));
+      if (kept.length) {
+        const docTitle = parts[0]?.title || path.basename(file, ".md");
+        const docId = stableId("doc", locator);
+        documents.set(docId, {
+          docId,
+          section,
+          title: docTitle,
+          headings: [...new Set(kept.map((part) => part.heading).filter((h): h is string => Boolean(h)))],
+          productIds,
+          source: { origin: "local", title: docTitle, locator },
+          parts: kept.map((part) => ({ ...(part.heading ? { heading: part.heading } : {}), text: part.text })),
+        });
+      }
       parts.forEach((part, i) => {
         if (isNoiseChunk(part.heading, part.text)) return;
         const title = part.title || path.basename(file, ".md");
@@ -371,7 +390,7 @@ export function createLocalLibrary(rootDir?: string): KnowledgeLibrary {
     images.push(...readImageIndex(path.join(root, "P6-营销素材库", "04-图片", "02-华为商城电脑专区素材", "图片索引.csv"), root, LIBRARY_SCENE_PRODUCT_ID, "华为商城电脑专区素材"));
 
     const prices = readPrices(path.join(p1, "08-官方公开价格快照", "官方价格快照.csv"), root, models);
-    index = { chunks, df, avgLen: chunks.reduce((s, c) => s + c.len, 0) / Math.max(1, chunks.length), docs, prices, briefs, images };
+    index = { chunks, df, avgLen: chunks.reduce((s, c) => s + c.len, 0) / Math.max(1, chunks.length), docs, prices, briefs, images, documents };
     return index;
   };
 
@@ -457,6 +476,20 @@ export function createLocalLibrary(rootDir?: string): KnowledgeLibrary {
         .sort((a, b) => b.s - a.s || a.i - b.i)
         .slice(0, q.limit ?? 6)
         .map((x) => x.im);
+    },
+
+    async documents(q = {}): Promise<LibraryDoc[]> {
+      const out: LibraryDoc[] = [];
+      for (const { parts: _parts, ...doc } of ensure().documents.values()) {
+        if (q.sections && !q.sections.includes(doc.section)) continue;
+        if (q.productId && !doc.productIds.includes(q.productId)) continue;
+        out.push(doc);
+      }
+      return out;
+    },
+
+    async document(docId) {
+      return ensure().documents.get(docId);
     },
 
     async readImage(imageId) {

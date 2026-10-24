@@ -27,6 +27,8 @@ function fakeLibrary(images: ImageRecord[], seen: LibraryImageQuery[] = []): Kno
     readImage: async () => {
       throw new Error("not used");
     },
+    documents: async () => [],
+    document: async () => undefined,
   };
 }
 
